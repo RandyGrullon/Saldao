@@ -51,11 +51,20 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
 2. Crea las tablas. Hay dos formas:
    - **SQL Editor:** pega cada archivo de `supabase/migrations/` en orden (por fecha en el nombre) y dale a Run.
    - **CLI:** corre `npx supabase login`, luego `npx supabase link --project-ref TU_REF` y luego `npm run db:push`; aplica solo las que falten.
-3. Configura Authentication:
-   - **Email:** actívalo. En *Email Templates → Magic Link* pon el código con `{{ .Token }}`; la app entra con un código de 6 dígitos.
-   - **URL Configuration:** en *Redirect URLs* agrega `http://localhost:5173`, tu IP local para probar en el teléfono y el dominio de producción.
-   - **Google:** opcional. Se activa en *Providers* con su Client ID y Secret.
-   - **SMTP propio:** usa Resend o similar antes de tener usuarios reales. El correo que trae Supabase manda muy pocos emails por hora.
+3. Configura Authentication. La app entra con **correo y contraseña** (con "olvidé mi contraseña") y con **Google**:
+   - **URL Configuration:**
+     - *Site URL:* `https://saldao-green.vercel.app`.
+     - *Redirect URLs:* `https://saldao-green.vercel.app/**`, `http://localhost:5173/**` y tu IP local con `:5173/**`.
+     - Los enlaces de confirmar cuenta y de nueva contraseña vuelven a esas direcciones.
+   - **Email:** activado, con "Confirm email" y una contraseña mínima de 8 caracteres.
+   - **SMTP propio (obligatorio para usuarios reales):** el correo que trae Supabase solo llega a los miembros de tu equipo en Supabase. Con Resend:
+     - verifica tu dominio;
+     - en *Project Settings → Authentication → SMTP* pon `smtp.resend.com`, puerto 465, usuario `resend` y tu API key como contraseña;
+     - remitente: `no-reply@tu-dominio`.
+   - **Google:**
+     - En Google Cloud crea un *OAuth client ID* de tipo Web.
+     - *Authorized redirect URI:* `https://<tu-ref>.supabase.co/auth/v1/callback`.
+     - Pega el Client ID y el Secret en *Sign In / Providers → Google*.
 4. Arranca con `npm run dev`. Para probar en el teléfono, abre `http://TU-IP:5173` en la misma red wifi.
 
 ## Tests

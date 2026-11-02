@@ -10,19 +10,46 @@ export function sb(): SupabaseClient {
 }
 export const isConfigured = () => !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-// ── sesión ───────────────────────────────────────────────────
-const redirect = () => location.origin + location.pathname + location.search;
-export async function sendCode(email: string) {
-  const { error } = await sb().auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: redirect() } });
-  if (error) throw error;
+// ── sesión: correo y contraseña ──────────────────────────────
+// Supabase responde en inglés; estos son los mensajes que una persona puede ver al entrar o registrarse.
+const AUTH_ES: [RegExp, string][] = [
+  [/invalid login credentials/i, 'Correo o contraseña incorrectos.'],
+  [/email not confirmed/i, 'Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam).'],
+  [/already (been )?registered/i, 'Ya existe una cuenta con ese correo. Entra o recupera tu contraseña.'],
+  [/password should be at least (\d+)/i, 'La contraseña debe tener al menos $1 caracteres.'],
+  [/weak|pwned|known to be/i, 'Esa contraseña es muy débil o apareció en filtraciones. Usa otra.'],
+  [/same.*password|different from the old/i, 'La contraseña nueva tiene que ser distinta de la anterior.'],
+  [/rate limit|too many|security purposes/i, 'Demasiados intentos. Espera un momento y vuelve a intentarlo.'],
+  [/signups? not allowed|signup.*disabled/i, 'El registro está cerrado por ahora.'],
+  [/invalid.*email|unable to validate email/i, 'Ese correo no parece válido.'],
+];
+function authError(e: { message: string }) {
+  for (const [r, t] of AUTH_ES) { const m = e.message.match(r); if (m) return new Error(t.replace('$1', m[1] ?? '')); }
+  return new Error(e.message);
 }
-export async function verifyCode(email: string, token: string) {
-  const { error } = await sb().auth.verifyOtp({ email, token, type: 'email' });
-  if (error) throw error;
+export async function signIn(email: string, password: string) {
+  const { error } = await sb().auth.signInWithPassword({ email, password });
+  if (error) throw authError(error);
+}
+/** Devuelve si hace falta confirmar el correo antes de entrar (depende de "Confirm email" en Supabase). */
+export async function signUp(name: string, email: string, password: string) {
+  const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: location.origin } });
+  if (error) throw authError(error);
+  // con "Confirm email" activo, un correo ya registrado no da error: vuelve un usuario sin identidades
+  if (data.user && !data.user.identities?.length) throw authError({ message: 'already registered' });
+  return { needsConfirm: !data.session };
 }
 export async function signInWithGoogle() {
-  const { error } = await sb().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirect() } });
-  if (error) throw error;
+  const { error } = await sb().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin } });
+  if (error) throw /provider is not enabled|unsupported provider/i.test(error.message) ? new Error('Google todavía no está activado en Supabase.') : authError(error);
+}
+export async function sendPasswordReset(email: string) {
+  const { error } = await sb().auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+  if (error) throw authError(error);
+}
+export async function setNewPassword(password: string) {
+  const { error } = await sb().auth.updateUser({ password });
+  if (error) throw authError(error);
 }
 
 // ── lectura ──────────────────────────────────────────────────

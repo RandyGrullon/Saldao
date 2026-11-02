@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { APP } from './app.config';
 import { start, stop, useSnap } from './data/store';
-import { isConfigured, sb, sendCode, signInWithGoogle, supabaseBackend, verifyCode } from './data/supabase';
+import { isConfigured, sb, supabaseBackend } from './data/supabase';
+import { pendingInvite } from './lib/invite';
+import { AuthScreen, NewPasswordScreen } from './screens/auth';
 import { ExpenseScreen, GroupScreen, PersonScreen } from './screens/detail';
 import { Account, ActivityTab, Groups, Home, useUnread } from './screens/tabs';
 import { AddExpenseSheet } from './sheets/AddExpense';
@@ -17,6 +19,8 @@ export function App() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [err, setErr] = useState('');
   const user = useRef<string | null | undefined>(undefined);
+  // al volver del enlace de "olvidé mi contraseña" se pide la nueva antes de entrar
+  const [recovery, setRecovery] = useState(() => location.hash.includes('type=recovery'));
   useEffect(() => {
     if (DEMO) { import('./data/demo').then(m => start(m.demoBackend)).then(() => setPhase('ready')); return; }
     if (!isConfigured()) { setPhase('setup'); return; }
@@ -28,12 +32,16 @@ export function App() {
       try { await start(supabaseBackend); setPhase('ready'); } catch (e) { setErr(errMsg(e)); setPhase('error'); }
     };
     // supabase-js recomienda no llamar a Supabase dentro del callback: se difiere un tick.
-    const { data } = sb().auth.onAuthStateChange((_ev, session) => { setTimeout(() => boot(session?.user.id ?? null), 0); });
+    const { data } = sb().auth.onAuthStateChange((ev, session) => {
+      if (ev === 'PASSWORD_RECOVERY') setRecovery(true);
+      setTimeout(() => boot(session?.user.id ?? null), 0);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
+  if (recovery && !DEMO && phase !== 'login') return <NewPasswordScreen onDone={() => setRecovery(false)} />;
   if (phase === 'ready') return <Ready />;
-  if (phase === 'login') return <Login />;
+  if (phase === 'login') return <AuthScreen />;
   if (phase === 'setup') return (
     <main className="gate"><h1>{APP.name}</h1>
       <p className="lead">Falta conectar Supabase: copia <code>.env.example</code> como <code>.env.local</code> con la URL y la anon key de tu proyecto, y vuelve a arrancar.</p>
@@ -45,45 +53,10 @@ export function App() {
   return <main className="gate" aria-busy="true"><p className="note center">Cargando…</p></main>;
 }
 
-function Login() {
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
-  const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const go = async (fn: () => Promise<void>) => {
-    setBusy(true); setMsg('');
-    try { await fn(); } catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); }
-  };
-  return (
-    <main className="gate">
-      <div><h1>{APP.name}</h1><p className="lead">{APP.description}</p></div>
-      {!sent ? (
-        <form className="form" onSubmit={e => { e.preventDefault(); go(async () => { await sendCode(email.trim()); setSent(true); }); }}>
-          <label>Tu correo<input className="field" type="email" inputMode="email" autoComplete="email" enterKeyHint="send" required value={email}
-            onChange={e => setEmail(e.target.value)} placeholder="tu@correo.com" /></label>
-          <button className="btn primary block tap" disabled={busy || !email.includes('@')}><Icon n="mail" sm />{busy ? 'Enviando…' : 'Enviarme un código'}</button>
-        </form>
-      ) : (
-        <form className="form" onSubmit={e => { e.preventDefault(); go(() => verifyCode(email.trim(), code.trim())); }}>
-          <p className="note">Te mandamos un código a <b>{email}</b>. Revisa también spam.</p>
-          <label>Código<input className="field code" inputMode="numeric" autoComplete="one-time-code" enterKeyHint="go" maxLength={8} value={code}
-            onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" /></label>
-          <button className="btn primary block tap" disabled={busy || code.length < 6}>{busy ? 'Entrando…' : 'Entrar'}</button>
-          <button type="button" className="link tap" onClick={() => { setSent(false); setCode(''); }}>Usar otro correo</button>
-        </form>
-      )}
-      <p className="or">o</p>
-      <button className="btn block tap" disabled={busy} onClick={() => go(signInWithGoogle)}>Entrar con Google</button>
-      {msg && <p className="err" role="alert">{msg}</p>}
-    </main>
-  );
-}
-
 function Ready() {
   const s = useSnap();
   const unread = useUnread(s);
-  const [token] = useState(() => new URLSearchParams(location.search).get('unirse'));
+  const [token] = useState(pendingInvite);
   if (!s) return null;
   return (
     <NavShell

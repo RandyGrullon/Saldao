@@ -327,9 +327,13 @@ textarea.field { padding: 12px 14px; min-height: 80px; resize: none; }
 .gate { min-height: 100dvh; display: grid; align-content: center; gap: 20px; padding: calc(24px + var(--sat)) var(--gut-r) calc(24px + var(--sab)) var(--gut-l); max-width: 440px; margin: 0 auto; }
 .gate h1 { font-size: 34px; }
 .gate .lead { font-size: 17px; color: var(--muted); }
-.code { letter-spacing: .4em; font-size: 24px !important; text-align: center; font-variant-numeric: tabular-nums; }
+.gate .link { justify-self: center; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.ic.brand { stroke: none; }
+.pass { position: relative; display: block; }
+.pass .field { padding-right: 52px; }
+.pass-eye { position: absolute; top: 2px; bottom: 2px; right: 2px; width: 46px; display: grid; place-items: center; color: var(--muted); border-radius: var(--r-control); }
 
 /* ── toast ── */
 .toast-host { position: absolute; left: 0; right: 0; bottom: calc(var(--tabbar-h) + var(--sab) + 12px); z-index: 20; display: grid; justify-items: center; padding: 0 16px; pointer-events: none; }

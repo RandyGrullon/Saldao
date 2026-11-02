@@ -4,6 +4,7 @@ import { friends, groupOf, short } from '../data/derive';
 import { run } from '../data/store';
 import type { GroupKind, InvitePreview } from '../data/types';
 import { getBackend } from '../data/store';
+import { clearInvite } from '../lib/invite';
 import { Icon } from '../ui/icons';
 import { Av, errMsg, useS } from '../ui/kit';
 import { SheetHead, buzz, useNav } from '../ui/nav';
@@ -110,19 +111,18 @@ export function JoinSheet({ token }: { token: string }) {
   const [as, setAs] = useState<Id | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { getBackend()?.invitePreview(token).then(setP, () => setP(null)); }, [token]);
-  const clearUrl = () => history.replaceState(history.state, '', location.pathname);
   const join = async () => {
     setBusy(true);
     try {
       let g = '';
       await run(async b => { g = await b.joinGroup(token, as); });
-      clearUrl(); buzz(); nav.closeSheet(); nav.push({ kind: 'group', id: g });
+      clearInvite(); buzz(); nav.closeSheet(); nav.push({ kind: 'group', id: g });
       nav.toast(`Ya estás en ${p!.name}`);
     } catch (e) { nav.toast(errMsg(e)); setBusy(false); }
   };
   return (
     <>
-      <SheetHead title="Invitación" left={<button className="link tap" onClick={() => { clearUrl(); nav.closeSheet(); }}>Ahora no</button>} />
+      <SheetHead title="Invitación" left={<button className="link tap" onClick={() => { clearInvite(); nav.closeSheet(); }}>Ahora no</button>} />
       <div className="scroll sheet-scroll pad">
         {p === undefined ? <p className="note center">Buscando el grupo…</p>
           : p === null ? <p className="finding">Esta invitación no es válida o ya expiró. Pide un enlace nuevo.</p> : <>
