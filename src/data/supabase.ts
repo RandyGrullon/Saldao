@@ -40,8 +40,12 @@ export async function signUp(name: string, email: string, password: string) {
   return { needsConfirm: !data.session };
 }
 export async function signInWithGoogle() {
+  // Si Google no está activado, Supabase redirige a una página de error en JSON: mejor avisar antes de salir de la app.
+  const settings = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY } })
+    .then(r => r.json()).catch(() => null);
+  if (settings && !settings.external?.google) throw new Error('Entrar con Google todavía no está activado. Usa tu correo y contraseña.');
   const { error } = await sb().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin } });
-  if (error) throw /provider is not enabled|unsupported provider/i.test(error.message) ? new Error('Google todavía no está activado en Supabase.') : authError(error);
+  if (error) throw authError(error);
 }
 export async function sendPasswordReset(email: string) {
   const { error } = await sb().auth.resetPasswordForEmail(email, { redirectTo: location.origin });
