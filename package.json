@@ -1,0 +1,31 @@
+{
+  "name": "saldao",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "dev:demo": "vite --host --mode demo",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "icons": "pwa-assets-generator"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vite-pwa/assets-generator": "^1.0.4",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^3.2.7"
+  }
+}
