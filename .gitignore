@@ -9,3 +9,4 @@ dev-dist
 supabase/.temp
 supabase/.branches
 .claude/
+.vercel
