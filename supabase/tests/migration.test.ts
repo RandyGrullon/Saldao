@@ -1,10 +1,12 @@
 // Corre la migración real en PGlite (Postgres en WASM) con un "auth" mínimo de imitación,
 // y prueba las reglas que importan: RLS, que los gastos cuadren, permisos y reclamar un marcador.
 import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-const sql = readFileSync(new URL('../migrations/20261102000000_init.sql', import.meta.url), 'utf8');
+// Todas las migraciones, en orden, como las aplica Supabase.
+const dir = new URL('../migrations/', import.meta.url);
+const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join(';\n');
 const db = new PGlite();
 const U = { ana: '00000000-0000-0000-0000-00000000000a', beto: '00000000-0000-0000-0000-00000000000b', cris: '00000000-0000-0000-0000-00000000000c' };
 
@@ -25,6 +27,8 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
     grant usage on schema auth, public to authenticated;
     grant execute on function auth.uid() to authenticated;
+    -- como en Supabase: cada función nueva de public se puede ejecutar desde anon y authenticated
+    alter default privileges in schema public grant execute on functions to anon, authenticated;
   `);
   await db.exec(sql);
   await db.exec(`grant select, insert, update on all tables in schema public to authenticated;`);
@@ -113,6 +117,23 @@ describe('migración', () => {
     expect(await as(U.beto, () => all('select id from groups where id = $1', [g2]))).toHaveLength(1);
     const cris = await pid(U.cris);
     await expect(as(U.ana, () => one('select add_member($1, $2)', [g2, cris]))).rejects.toThrow(/otros grupos/);
+  });
+
+  it('las funciones internas no se pueden llamar desde la API', async () => {
+    await expect(as(U.cris, () => one('select merge_profiles($1, $2)', [beto, ana]))).rejects.toThrow(/permission denied/);
+    await db.exec(`reset role; set role anon;`);
+    await expect(db.query('select invite_preview($1)', ['00000000-0000-0000-0000-000000000000'])).rejects.toThrow(/permission denied/);
+    await db.exec('reset role;');
+  });
+
+  it('un comentario no se mueve a un gasto de otro grupo', async () => {
+    const otro = await as(U.cris, async () => (await one<{ g: string }>(`select create_group('Cris', 'otro') as g`)).g);
+    const cris = await pid(U.cris);
+    const ajeno = await as(U.cris, async () => (await one<{ id: string }>('select save_expense($1) as id',
+      [JSON.stringify({ group_id: otro, description: 'x', amount: 100, payers: { [cris]: 100 }, shares: { [cris]: 100 } })])).id);
+    const mio = await as(U.beto, async () => (await one('select id from comments where profile_id = $1 limit 1', [beto])).id);
+    const r = await as(U.beto, () => db.query('update comments set expense_id = $1 where id = $2', [ajeno, mio]).then(() => 'ok', e => e.message));
+    expect(r).toMatch(/row-level security|violates/);
   });
 
   it('gastos de dos sin grupo usan un grupo directo reutilizable', async () => {

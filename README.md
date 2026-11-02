@@ -49,8 +49,8 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
 
 1. Copia `.env.example` como `.env.local` y pon `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (Project Settings → API). La anon key es pública: la seguridad la dan las reglas RLS.
 2. Crea las tablas. Hay dos formas:
-   - **SQL Editor:** pega `supabase/migrations/20261102000000_init.sql` y dale a Run.
-   - **CLI:** corre `npx supabase login`, luego `npx supabase link --project-ref TU_REF` y luego `npx supabase db push`.
+   - **SQL Editor:** pega cada archivo de `supabase/migrations/` en orden (por fecha en el nombre) y dale a Run.
+   - **CLI:** corre `npx supabase login`, luego `npx supabase link --project-ref TU_REF` y luego `npm run db:push`; aplica solo las que falten.
 3. Configura Authentication:
    - **Email:** actívalo. En *Email Templates → Magic Link* pon el código con `{{ .Token }}`; la app entra con un código de 6 dígitos.
    - **URL Configuration:** en *Redirect URLs* agrega `http://localhost:5173`, tu IP local para probar en el teléfono y el dominio de producción.
@@ -74,6 +74,11 @@ Hay dos suites:
   - borrar y restaurar;
   - comentarios;
   - grupos de a dos.
+
+## Documentos
+
+- `docs/PLAN.md`: el plan completo, lo que hace Splitwise y cómo lo mejoramos.
+- `docs/prototipos/`: los dos diseños de ejemplo (A Pastel, el elegido, y B Libreta).
 
 ## Estructura
 

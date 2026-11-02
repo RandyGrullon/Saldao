@@ -1,0 +1,121 @@
+<title>Cuentas Claras · Libreta</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Diseño B · Libreta: un estado de cuenta. Sin color en la interfaz: tinta sobre un gris azulado de libro contable,
+   el botón principal casi negro, el dinero en 700 y un solo tono (#1d5fbf) para lo que te deben en la barra por persona.
+   Radios cerrados (8 / 6), bordes de 1px, cada gasto con su fecha a la izquierda y el saldo acumulado a la derecha. */
+:root {
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ground: #f2f4f7; --surface: #ffffff; --raised: #f6f7f9; --active: #eeeff1; --border: #e3e5e8; --rule: #eeeff1; --control: #d0d3d7;
+  --text: #0a0a0a; --muted: #62666b; --faint: #6b6f74;
+  --primary: #141414; --on-primary: #ffffff; --link: #0a0a0a; --secondary: #e5e6e8; --on-secondary: #0a0a0a;
+  --positive: #0a0a0a; --negative: #c4242a; --on-negative: #ffffff; --chart: #1d5fbf;
+  --ok-bg: #dcfae5; --ok-ink: #04250e; --warn-bg: #fffbeb; --warn-ink: #92400e; --pill-bg: #eeeff1; --pill-ink: #3d3d3d;
+  --sel-bg: #141414; --sel-border: #141414; --sel-ink: #ffffff; --seg-bg: #e8eaed;
+  --scrim: rgb(10 10 10 / .4); --sheet: #f2f4f7; --keypad: #e8eaed; --key: #ffffff;
+  --toast-bg: #141414; --toast-ink: #ffffff; --toast-action: #ffffff;
+  --focus: #1d5fbf; --selection: #d6e4fb; --outside: #e1e4e9; --bar: #f2f4f7; --badge: #c4242a; --on-badge: #ffffff;
+  --av-bg: #e6e8eb; --av-ink: #2b2d30; --me-bg: #141414; --me-ink: #ffffff;
+  --fs-title: 24px; --fs-section: 15px; --fs-big: 30px; --fs-body: 15px; --fs-small: 13px;
+  --title-weight: 600; --money-weight: 600; --big-weight: 700;
+  --r-card: 8px; --r-control: 6px; --r-inner: 6px; --r-chip: 4px; --r-chip-lg: 6px; --r-sheet: 14px; --r-add: 8px; --r-toast: 8px;
+  --row-h: 56px; --row-pad: 14px; --card-pad: 16px; --card-border: 1px solid var(--border);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #000000; --surface: #111111; --raised: #1a1a1a; --active: #1f1f1f; --border: #2e2e2e; --rule: #1f1f1f; --control: #444444;
+  --text: #ffffff; --muted: #b4b4b4; --faint: #949494;
+  --primary: #ffffff; --on-primary: #000000; --link: #ffffff; --secondary: #222222; --on-secondary: #ffffff;
+  --positive: #ffffff; --negative: #e5566f; --on-negative: #000000; --chart: #5b9bff;
+  --ok-bg: #172a1d; --ok-ink: #3fc07a; --warn-bg: #2b2210; --warn-ink: #e8b45a; --pill-bg: #222222; --pill-ink: #cccccc;
+  --sel-bg: #ffffff; --sel-border: #ffffff; --sel-ink: #000000; --seg-bg: #1a1a1a;
+  --scrim: rgb(0 0 0 / .65); --sheet: #0a0a0a; --keypad: #0a0a0a; --key: #1c1c1c;
+  --toast-bg: #ffffff; --toast-ink: #000000; --toast-action: #000000;
+  --focus: #5b9bff; --selection: #1d3a6b; --outside: #000000; --bar: #000000; --badge: #e5566f; --on-badge: #000000;
+  --av-bg: #222222; --av-ink: #dddddd; --me-bg: #ffffff; --me-ink: #000000;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --ground: #000000; --surface: #111111; --raised: #1a1a1a; --active: #1f1f1f; --border: #2e2e2e; --rule: #1f1f1f; --control: #444444;
+  --text: #ffffff; --muted: #b4b4b4; --faint: #949494;
+  --primary: #ffffff; --on-primary: #000000; --link: #ffffff; --secondary: #222222; --on-secondary: #ffffff;
+  --positive: #ffffff; --negative: #e5566f; --on-negative: #000000; --chart: #5b9bff;
+  --ok-bg: #172a1d; --ok-ink: #3fc07a; --warn-bg: #2b2210; --warn-ink: #e8b45a; --pill-bg: #222222; --pill-ink: #cccccc;
+  --sel-bg: #ffffff; --sel-border: #ffffff; --sel-ink: #000000; --seg-bg: #1a1a1a;
+  --scrim: rgb(0 0 0 / .65); --sheet: #0a0a0a; --keypad: #0a0a0a; --key: #1c1c1c;
+  --toast-bg: #ffffff; --toast-ink: #000000; --toast-action: #000000;
+  --focus: #5b9bff; --selection: #1d3a6b; --outside: #000000; --bar: #000000; --badge: #e5566f; --on-badge: #000000;
+  --av-bg: #222222; --av-ink: #dddddd; --me-bg: #ffffff; --me-ink: #000000;
+  color-scheme: dark;
+}
+
+.av[data-me] { --av-bg: var(--me-bg); --av-ink: var(--me-ink); }
+.toast button { text-decoration: underline; text-underline-offset: 3px; }
+.zero, .zero .money { color: var(--faint); }
+.lead.date { border-right: 1px solid var(--rule); padding-right: 10px; width: 44px; }
+
+/* inicio */
+.card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.card-h .link { min-height: 28px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.asof { font-size: 13px; color: var(--muted); }
+.kpis { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 !important; padding: 0 !important; }
+.kpi { display: grid; gap: 2px; padding: 14px; min-width: 0; }
+.kpi + .kpi { border-left: 1px solid var(--rule); }
+.kpi.net { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: baseline; }
+.kv .money { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.kpi.net .kv .money { font-size: var(--fs-big); }
+.kpis .finding-line { grid-column: 1 / -1; padding: 0 16px 12px; font-size: 14px; }
+.kpis .btn { grid-column: 1 / -1; margin: 0 16px 16px; width: auto; }
+.finding-line b { font-weight: 600; }
+.legend-k { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.legend-k i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.legend-k .owe { background: var(--text); } .legend-k .owed { background: var(--chart); margin-left: 6px; }
+.dbars { display: grid; }
+.dbars li + li { border-top: 1px solid var(--rule); }
+.db { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 12px 0; text-align: left; }
+.db-n { display: grid; font-weight: 500; }
+.db-n small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.db-v { align-self: center; }
+.db-track { grid-column: 1 / -1; position: relative; height: 10px; }
+.db-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--control); }
+.db-bar { position: absolute; top: 1px; bottom: 1px; width: var(--w); border-radius: 2px; }
+.db-bar.r { left: 50%; background: var(--chart); }
+.db-bar.l { right: 50%; background: var(--text); }
+.ledger .row { gap: 10px; }
+</style>
+<div id="app"></div>
+<script src="shared.js"></script>
+<script>
+CC.start({
+  variant: 'ledger',
+  home() {
+    const { money, moneyT, P, FRIENDS, GROUPS, friendBal, pendingInfo, myTotals, groupRow, live, mineOf, byNewest, gname, esc, fdate } = CC;
+    const t = myTotals();
+    const people = FRIENDS.map(p => ({ p, b: friendBal(p).b, i: pendingInfo(p) })).sort((a, b) => b.b - a.b);
+    const max = Math.max(1, ...people.map(x => Math.abs(x.b)));
+    const top = people[0].b > 0 ? people[0] : null;
+    const moves = live().filter(e => mineOf(e)).sort(byNewest).slice(0, 6);
+    return `<div class="scroll pad home">
+      <header class="title-row"><h1>Saldos</h1><span class="asof">al ${fdate('2026-11-02')}</span></header>
+      <section class="card kpis">
+        <div class="kpi"><p class="lbl">Te deben</p><p class="kv">${money(t.owed)}</p></div>
+        <div class="kpi"><p class="lbl">Debes</p><p class="kv">${money(t.owe)}</p></div>
+        <div class="kpi net"><p class="lbl">Neto</p><p class="kv">${money(t.net, 'DOP', true)}</p></div>
+        ${top ? `<p class="finding-line"><b>${P[top.p].short}</b> te debe ${moneyT(top.b)}: ${top.i.n} ${top.i.n === 1 ? 'gasto' : 'gastos'} sin saldar desde el ${fdate(top.i.since)}.</p>` : ''}
+        <button class="btn primary tap" data-act="settle-any">Saldar cuentas</button></section>
+      <section class="card"><header class="card-h"><h2>Por persona</h2><span class="legend-k"><i class="owe"></i>debes<i class="owed"></i>te deben</span></header>
+        <ul class="dbars">${people.map(x => `<li><button class="db tap" data-act="open-friend" data-id="${x.p}" aria-label="${P[x.p].name}: ${x.b > 0 ? 'te debe' : x.b < 0 ? 'le debes' : 'a mano'} ${moneyT(Math.abs(x.b))}">
+          <span class="db-n">${P[x.p].name}<small>${x.i.n ? `${x.i.n} sin saldar · desde ${fdate(x.i.since)}` : 'todo saldado'}</small></span>
+          <span class="db-v">${x.b ? money(x.b, 'DOP', true) : '<span class="zero">a mano</span>'}</span>
+          <span class="db-track" aria-hidden="true"><span class="db-bar ${x.b > 0 ? 'r' : 'l'}" style="--w:${(Math.abs(x.b) / max * 50).toFixed(2)}%"></span></span></button></li>`).join('')}</ul></section>
+      <section class="card"><header class="card-h"><h2>Grupos</h2><button class="link tap" data-act="tab" data-tab="groups">Ver todos</button></header>
+        <ul class="list">${GROUPS.map(groupRow).join('')}</ul></section>
+      <section class="card"><header class="card-h"><h2>Movimientos</h2><button class="link tap" data-act="tab" data-tab="activity">Ver todo</button></header>
+        <ul class="list ledger">${moves.map(e => { const [d, m] = fdate(e.date).split(' ');
+          return `<li><button class="row tap" data-act="open-exp" data-id="${e.id}"><span class="lead date"><b>${d}</b>${m}</span>
+            <span class="main"><span class="t">${e.pay ? 'Pago' : esc(e.desc)}</span><span class="s">${esc(gname(e.g))}</span></span>
+            <span class="end">${money(mineOf(e), 'DOP', true)}</span></button></li>`; }).join('')}</ul></section></div>`;
+  },
+});
+</script>

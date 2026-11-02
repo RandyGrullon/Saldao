@@ -1,0 +1,113 @@
+<title>Cuentas Claras · Pastel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Diseño A · Pastel: cada persona tiene su tono (pálido de fondo, oscuro del mismo tono como tinta),
+   un radio grande (20 → 12 → 6), el dinero en Manrope semibold y polaridad tranquila: lo que te deben en verde con +, lo que debes en tinta, nunca rojo. */
+:root {
+  --font: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ground: #f3f5f7; --surface: #ffffff; --raised: #f2f6fa; --active: #eceff3; --border: #e3e6ea; --rule: #eff1f4; --control: #d6d9dd;
+  --text: #1b1d1f; --muted: #5c6064; --faint: #6f7378;
+  --primary: #1d5fd6; --on-primary: #ffffff; --link: #1d5fd6; --secondary: #e9eef6; --on-secondary: #0a3a80;
+  --positive: #2f7a45; --negative: #c41c29; --on-negative: #ffffff;
+  --ok-bg: #dcfae5; --ok-ink: #04250e; --warn-bg: #fff4d6; --warn-ink: #7a3a06; --pill-bg: #eef1f4; --pill-ink: #3a3d40;
+  --sel-bg: #dcf1ff; --sel-border: #1d5fd6; --sel-ink: #0a3a80; --seg-bg: #e9ecf0;
+  --scrim: rgb(15 22 35 / .38); --sheet: #f3f5f7; --keypad: #e9ecf0; --key: #ffffff;
+  --toast-bg: #1b1d1f; --toast-ink: #ffffff; --toast-action: #9cc3ff;
+  --focus: #1d5fd6; --selection: #cfe6ff; --outside: #e2e7ec; --bar: #ffffff; --badge: #c41c29; --on-badge: #ffffff;
+  --tile-l: 94%; --tile-s: 85%; --tile-ink-l: 22%; --av-l: 86%; --av-ink-l: 24%;
+  --fs-title: 28px; --fs-section: 18px; --fs-big: 32px; --fs-body: 16px; --fs-small: 14px;
+  --title-weight: 600; --money-weight: 600; --big-weight: 600;
+  --r-card: 20px; --r-control: 12px; --r-inner: 12px; --r-chip: 6px; --r-chip-lg: 999px; --r-sheet: 24px; --r-add: 14px; --r-toast: 14px;
+  --row-h: 64px; --row-pad: 16px; --card-pad: 20px; --card-border: 0;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #0f1113; --surface: #1a1d21; --raised: #22262b; --active: #272b31; --border: #24272b; --rule: #262a2f; --control: #3d424a;
+  --text: #f2f4f6; --muted: #a9afb6; --faint: #8d939a;
+  --primary: #2c6be0; --on-primary: #ffffff; --link: #8cb4ff; --secondary: #1d2b44; --on-secondary: #cfe0ff;
+  --positive: #63cf8f; --negative: #ff6b74; --on-negative: #1a0a0b;
+  --ok-bg: #16301f; --ok-ink: #84e2a9; --warn-bg: #352810; --warn-ink: #f5c56b; --pill-bg: #272b31; --pill-ink: #c9ced4;
+  --sel-bg: #15294a; --sel-border: #8cb4ff; --sel-ink: #d6e5ff; --seg-bg: #22262b;
+  --scrim: rgb(0 0 0 / .6); --sheet: #131518; --keypad: #131518; --key: #24282d;
+  --toast-bg: #f2f4f6; --toast-ink: #111315; --toast-action: #1d5fd6;
+  --focus: #8cb4ff; --selection: #1d3a6b; --outside: #08090a; --bar: #15181b; --badge: #ff6b74; --on-badge: #1a0a0b;
+  --tile-l: 17%; --tile-s: 40%; --tile-ink-l: 84%; --av-l: 26%; --av-ink-l: 86%;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --ground: #0f1113; --surface: #1a1d21; --raised: #22262b; --active: #272b31; --border: #24272b; --rule: #262a2f; --control: #3d424a;
+  --text: #f2f4f6; --muted: #a9afb6; --faint: #8d939a;
+  --primary: #2c6be0; --on-primary: #ffffff; --link: #8cb4ff; --secondary: #1d2b44; --on-secondary: #cfe0ff;
+  --positive: #63cf8f; --negative: #ff6b74; --on-negative: #1a0a0b;
+  --ok-bg: #16301f; --ok-ink: #84e2a9; --warn-bg: #352810; --warn-ink: #f5c56b; --pill-bg: #272b31; --pill-ink: #c9ced4;
+  --sel-bg: #15294a; --sel-border: #8cb4ff; --sel-ink: #d6e5ff; --seg-bg: #22262b;
+  --scrim: rgb(0 0 0 / .6); --sheet: #131518; --keypad: #131518; --key: #24282d;
+  --toast-bg: #f2f4f6; --toast-ink: #111315; --toast-action: #1d5fd6;
+  --focus: #8cb4ff; --selection: #1d3a6b; --outside: #08090a; --bar: #15181b; --badge: #ff6b74; --on-badge: #1a0a0b;
+  --tile-l: 17%; --tile-s: 40%; --tile-ink-l: 84%; --av-l: 26%; --av-ink-l: 86%;
+  color-scheme: dark;
+}
+
+/* cada persona, su tono */
+.av { --av-bg: hsl(var(--h) 70% var(--av-l)); --av-ink: hsl(var(--h) 65% var(--av-ink-l)); }
+.av[data-me] { --av-bg: var(--text); --av-ink: var(--surface); }
+.lead.date { display: none; }
+.why .lead.date { display: grid; }
+
+/* inicio */
+.home .title-row .me { border-radius: 50%; }
+.hero { display: grid; gap: 6px; }
+.hero .big { font-size: 34px; }
+.split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.split2 > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r-inner); background: var(--raised); }
+.split2 .money { font-size: 17px; }
+.finding-line { font-size: 15px; color: var(--text); padding: 4px 0; }
+.finding-line b { font-weight: 600; }
+.tiles { display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  overscroll-behavior-x: contain; margin: 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding: 0 max(16px, env(safe-area-inset-left, 0px)); scroll-padding: 0 max(16px, env(safe-area-inset-left, 0px)); }
+.tiles::-webkit-scrollbar { display: none; }
+.tiles li { scroll-snap-align: start; }
+.tile { width: 100%; height: 100%; display: grid; align-content: start; gap: 2px; padding: 14px; border-radius: var(--r-card);
+  background: hsl(var(--h) var(--tile-s) var(--tile-l)); color: hsl(var(--h) 60% var(--tile-ink-l)); }
+.tile .av { --av-bg: hsl(var(--h) 70% var(--av-l)); margin-bottom: 8px; }
+.tile-n { font-weight: 600; }
+.tile-l { font-size: 13px; opacity: .8; }
+.tile-v .money { font-size: 18px; color: inherit; }
+.tile-s { margin-top: 6px; font-size: 12px; opacity: .8; }
+.tile.zero { background: var(--surface); color: var(--muted); }
+.sec .link { min-height: 32px; font-size: 14px; }
+</style>
+<div id="app"></div>
+<script src="shared.js"></script>
+<script>
+CC.start({
+  variant: 'pastel',
+  home() {
+    const { money, moneyT, av, P, FRIENDS, GROUPS, friendBal, pendingInfo, myTotals, groupRow, events, evRow, fdate } = CC;
+    const t = myTotals();
+    const people = FRIENDS.map(p => ({ p, b: friendBal(p).b, i: pendingInfo(p) })).sort((a, b) => b.b - a.b);
+    const top = people[0].b > 0 ? people[0] : null, owe = people.filter(x => x.b < 0).sort((a, b) => a.b - b.b)[0];
+    const finding = [top && `<b>${P[top.p].short}</b> es quien más te debe: ${moneyT(top.b)}, sin saldar desde el ${fdate(top.i.since)}.`,
+      owe && `A quien más le debes es a <b>${P[owe.p].short}</b>: ${moneyT(-owe.b)}.`].filter(Boolean).join(' ');
+    return `<div class="scroll pad home">
+      <header class="title-row"><h1>Balance</h1><button class="me tap" data-act="tab" data-tab="account" aria-label="Tu cuenta">${av('me')}</button></header>
+      <section class="card hero"><p class="lbl">${t.net >= 0 ? 'En total te deben' : 'En total debes'}</p>
+        <p class="big${t.net > 0 ? ' pos' : ''}">${money(Math.abs(t.net), 'DOP', t.net > 0)}</p>
+        <div class="split2"><div><span class="lbl">Te deben</span>${money(t.owed)}</div><div><span class="lbl">Debes</span>${money(t.owe)}</div></div>
+        ${finding ? `<p class="finding-line">${finding}</p>` : ''}
+        <button class="btn primary block tap" data-act="settle-any">Saldar cuentas</button></section>
+      <h2 class="sec">Personas <span class="hint">toca para ver por qué</span></h2>
+      <ul class="tiles">${people.map(x => `<li><button class="tile tap${x.b ? '' : ' zero'}" data-act="open-friend" data-id="${x.p}" style="--h:${P[x.p].hue}">
+        ${av(x.p)}<span class="tile-n">${P[x.p].short}</span>
+        <span class="tile-l">${x.b > 0 ? 'te debe' : x.b < 0 ? 'le debes' : 'están a mano'}</span>
+        <span class="tile-v">${x.b ? money(Math.abs(x.b), 'DOP', x.b > 0) : ''}</span>
+        <span class="tile-s">${x.i.n ? `${x.i.n} ${x.i.n === 1 ? 'gasto' : 'gastos'} sin saldar · desde ${fdate(x.i.since)}` : 'todo saldado'}</span></button></li>`).join('')}</ul>
+      <h2 class="sec">Grupos <button class="link tap" data-act="tab" data-tab="groups">Ver todos</button></h2>
+      <ul class="list card">${GROUPS.map(groupRow).join('')}</ul>
+      <h2 class="sec">Reciente <button class="link tap" data-act="tab" data-tab="activity">Actividad</button></h2>
+      <ul class="list card">${events().slice(0, 4).map(evRow).join('')}</ul></div>`;
+  },
+});
+</script>
