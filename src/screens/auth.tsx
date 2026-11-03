@@ -1,10 +1,23 @@
 import { useState, type FormEvent } from 'react';
 import { APP } from '../app.config';
-import { sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp } from '../data/supabase';
+import { UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp } from '../data/supabase';
 import { Icon } from '../ui/icons';
 import { errMsg } from '../ui/kit';
 
 const MIN = 8;
+
+// Si se abre un enlace del correo que venció o ya se usó, Supabase vuelve con el error en la URL.
+const LINK_ERR = (() => {
+  const q = new URLSearchParams(`${location.hash.slice(1)}&${location.search.slice(1)}`);
+  const code = q.get('error_code');
+  if (!code) return '';
+  const rest = new URLSearchParams(location.search);
+  for (const k of ['error', 'error_code', 'error_description']) rest.delete(k);
+  history.replaceState(history.state, '', location.pathname + (rest.toString() ? `?${rest}` : ''));
+  return code === 'otp_expired'
+    ? 'Ese enlace ya venció o ya se usó. Si ya confirmaste tu correo, entra normal. Si no, escribe tu correo y pide otro.'
+    : 'No pudimos abrir ese enlace. Entra con tu correo y contraseña o pide otro correo.';
+})();
 
 function PasswordField({ label, value, onChange, autoComplete }: {
   label: string; value: string; onChange: (v: string) => void; autoComplete: 'current-password' | 'new-password';
@@ -29,9 +42,10 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState(LINK_ERR);
   const [info, setInfo] = useState('');
-  const go = (m: typeof mode) => { setMode(m); setMsg(''); setInfo(''); };
+  const [resend, setResend] = useState(!!LINK_ERR);
+  const go = (m: typeof mode) => { setMode(m); setMsg(''); setInfo(''); setResend(false); };
   const em = email.trim();
   const valid = em.includes('@') && (mode === 'reset' || (mode === 'login' ? pass.length > 0 : pass.length >= MIN && name.trim().length > 0));
 
@@ -43,11 +57,21 @@ export function AuthScreen() {
       if (mode === 'login') await signIn(em, pass);
       else if (mode === 'register') {
         const { needsConfirm } = await signUp(name.trim(), em, pass);
-        if (needsConfirm) { setMode('login'); setPass(''); setInfo(`Te enviamos un correo a ${em}. Abre el enlace para activar tu cuenta y luego entra aquí.`); }
+        if (needsConfirm) { setMode('login'); setPass(''); setResend(true); setInfo(`Te enviamos un correo a ${em}. Abre el enlace para activar tu cuenta y luego entra aquí.`); }
       } else {
         await sendPasswordReset(em);
         setInfo(`Si hay una cuenta con ${em}, te llegará un enlace para crear una contraseña nueva. Revisa también spam.`);
       }
+    } catch (err) {
+      setMsg(errMsg(err));
+      if (err instanceof Error && err.message === UNCONFIRMED) setResend(true);
+    } finally { setBusy(false); }
+  };
+  const again = async () => {
+    setBusy(true); setMsg(''); setInfo('');
+    try {
+      await resendConfirmation(em);
+      setInfo(`Te enviamos otro correo a ${em}. Abre el enlace para activar tu cuenta. Revisa también spam.`);
     } catch (err) { setMsg(errMsg(err)); } finally { setBusy(false); }
   };
 
@@ -81,6 +105,7 @@ export function AuthScreen() {
       {mode === 'reset' && <button type="button" className="link tap" onClick={() => go('login')}>Volver a entrar</button>}
       {info && <p className="note" role="status">{info}</p>}
       {msg && <p className="err" role="alert">{msg}</p>}
+      {mode === 'login' && resend && <button type="button" className="link tap" disabled={busy || !em.includes('@')} onClick={again}>Reenviar el correo de confirmación</button>}
     </main>
   );
 }

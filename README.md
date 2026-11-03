@@ -61,6 +61,7 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
      - verifica tu dominio;
      - en *Project Settings → Authentication → SMTP* pon `smtp.resend.com`, puerto 465, usuario `resend` y tu API key como contraseña;
      - remitente: `no-reply@tu-dominio`.
+   - **Email Templates:** la cuenta se confirma con un enlace, no con código. En *Confirm signup* y *Reset password* pega el asunto y el HTML de `supabase/templates/confirmar.html` y `recuperar.html` (los asuntos están en `supabase/config.toml`).
    - **Google:**
      - En Google Cloud crea un *OAuth client ID* de tipo Web.
      - *Authorized redirect URI:* `https://<tu-ref>.supabase.co/auth/v1/callback`.

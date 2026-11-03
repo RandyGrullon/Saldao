@@ -11,10 +11,11 @@ export function sb(): SupabaseClient {
 export const isConfigured = () => !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 // ── sesión: correo y contraseña ──────────────────────────────
+export const UNCONFIRMED = 'Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam).';
 // Supabase responde en inglés; estos son los mensajes que una persona puede ver al entrar o registrarse.
 const AUTH_ES: [RegExp, string][] = [
   [/invalid login credentials/i, 'Correo o contraseña incorrectos.'],
-  [/email not confirmed/i, 'Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam).'],
+  [/email not confirmed/i, UNCONFIRMED],
   [/already (been )?registered/i, 'Ya existe una cuenta con ese correo. Entra o recupera tu contraseña.'],
   [/password should be at least (\d+)/i, 'La contraseña debe tener al menos $1 caracteres.'],
   [/weak|pwned|known to be/i, 'Esa contraseña es muy débil o apareció en filtraciones. Usa otra.'],
@@ -38,6 +39,10 @@ export async function signUp(name: string, email: string, password: string) {
   // con "Confirm email" activo, un correo ya registrado no da error: vuelve un usuario sin identidades
   if (data.user && !data.user.identities?.length) throw authError({ message: 'already registered' });
   return { needsConfirm: !data.session };
+}
+export async function resendConfirmation(email: string) {
+  const { error } = await sb().auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.origin } });
+  if (error) throw authError(error);
 }
 export async function signInWithGoogle() {
   // Si Google no está activado, Supabase redirige a una página de error en JSON: mejor avisar antes de salir de la app.
