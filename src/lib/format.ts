@@ -40,3 +40,8 @@ export function ago(s: string, now = Date.now()) {
 }
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+// Usuario para entrar: igual que en la base (profiles.username).
+export const USERNAME = /^[a-z0-9._]{3,20}$/;
+export const USERNAME_RULE = 'De 3 a 20: minúsculas, números, punto o guion bajo.';
+export const typedUser = (v: string) => v.toLowerCase().replace(/^@|\s/g, '');

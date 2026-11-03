@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 const dir = new URL('../migrations/', import.meta.url);
 const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join(';\n');
 const db = new PGlite();
-const U = { ana: '00000000-0000-0000-0000-00000000000a', beto: '00000000-0000-0000-0000-00000000000b', cris: '00000000-0000-0000-0000-00000000000c' };
+const U = { ana: '00000000-0000-0000-0000-00000000000a', beto: '00000000-0000-0000-0000-00000000000b', cris: '00000000-0000-0000-0000-00000000000c', dani: '00000000-0000-0000-0000-00000000000d' };
 
 async function as<T>(user: string | null, fn: () => Promise<T>): Promise<T> {
   await db.exec(`reset role; select set_config('test.uid', '${user ?? ''}', false);`);
@@ -23,17 +23,21 @@ beforeAll(async () => {
   await db.exec(`
     create role authenticated; create role anon;
     create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', encrypted_password text default '');
+    -- PGlite no trae pgcrypto: un crypt de imitación que se usa igual (hash = crypt(clave, hash))
+    create schema extensions;
+    create function extensions.crypt(p text, salt text) returns text language sql immutable as $$ select 'h:' || p $$;
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
     grant usage on schema auth, public to authenticated;
+    grant usage on schema public to anon;
     grant execute on function auth.uid() to authenticated;
     -- como en Supabase: cada función nueva de public se puede ejecutar desde anon y authenticated
     alter default privileges in schema public grant execute on functions to anon, authenticated;
   `);
   await db.exec(sql);
   await db.exec(`grant select, insert, update on all tables in schema public to authenticated;`);
-  await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values
-    ('${U.ana}', 'ana@ejemplo.do', '{"full_name":"Ana Peña"}'), ('${U.beto}', 'beto@ejemplo.do', '{}'), ('${U.cris}', 'cris@ejemplo.do', '{}');`);
+  await db.exec(`insert into auth.users (id, email, raw_user_meta_data, encrypted_password) values
+    ('${U.ana}', 'ana@ejemplo.do', '{"full_name":"Ana Peña","username":"Ana.Pena"}', 'h:secreto123'), ('${U.beto}', 'beto@ejemplo.do', '{}', ''), ('${U.cris}', 'cris@ejemplo.do', '{}', '');`);
 }, 60000);
 
 describe('migración', () => {
@@ -141,5 +145,51 @@ describe('migración', () => {
     const d2 = await as(U.beto, async () => (await one<{ g: string }>('select direct_group($1) as g', [ana])).g);
     expect(d1).toBe(d2);
     await expect(as(U.cris, () => one('select direct_group($1)', [ana]))).rejects.toThrow(/personas de tus grupos/);
+  });
+});
+
+describe('usuario para entrar', () => {
+  const anon = async <T>(fn: () => Promise<T>) => {
+    await db.exec('reset role; set role anon;');
+    try { return await fn(); } finally { await db.exec('reset role;'); }
+  };
+  const login = (u: string, p: string) => anon(() => one<{ e: string | null }>('select login_email($1, $2) as e', [u, p]).then(r => r.e));
+
+  it('el usuario del registro queda en el perfil, en minúsculas', async () => {
+    expect((await one('select username from profiles where user_id = $1', [U.ana])).username).toBe('ana.pena');
+    expect((await one('select username from profiles where user_id = $1', [U.beto])).username).toBeNull();
+  });
+
+  it('un usuario repetido al registrarse queda vacío en vez de fallar', async () => {
+    await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'dani@ejemplo.do', '{"username":"ana.pena"}')`, [U.dani]);
+    expect((await one('select username from profiles where user_id = $1', [U.dani])).username).toBeNull();
+  });
+
+  it('sin sesión se puede ver si un usuario está libre', async () => {
+    expect(await anon(() => one('select username_available($1) as ok', ['ANA.pena']))).toEqual({ ok: false });
+    expect(await anon(() => one('select username_available($1) as ok', ['dani_88']))).toEqual({ ok: true });
+    expect(await anon(() => one('select username_available($1) as ok', ['ab']))).toEqual({ ok: false });
+  });
+
+  it('el correo solo sale con la contraseña correcta', async () => {
+    expect(await login('ana.pena', 'otra')).toBeNull();
+    expect(await login('nadie', 'secreto123')).toBeNull();
+    expect(await login(' Ana.Pena ', 'secreto123')).toBe('ana@ejemplo.do');
+  });
+
+  it('5 intentos fallidos bloquean el usuario aunque después acierte', async () => {
+    for (let i = 0; i < 5; i++) expect(await login('ana.pena', 'mal')).toBeNull();
+    await expect(login('ana.pena', 'secreto123')).rejects.toThrow(/Demasiados intentos/);
+  });
+
+  it('nadie lee los intentos por la API', async () => {
+    expect(await as(U.ana, () => all('select * from login_attempts'))).toHaveLength(0);
+  });
+
+  it('cada quien cambia su usuario, con formato válido y sin repetir', async () => {
+    await expect(as(U.beto, () => db.query(`update profiles set username = 'ana.pena' where user_id = $1`, [U.beto]))).rejects.toThrow(/duplicate key/);
+    await expect(as(U.beto, () => db.query(`update profiles set username = 'Beto!' where user_id = $1`, [U.beto]))).rejects.toThrow(/check constraint/);
+    await as(U.beto, () => db.query(`update profiles set username = 'beto' where user_id = $1`, [U.beto]));
+    expect(await anon(() => one('select username_available($1) as ok', ['beto']))).toEqual({ ok: false });
   });
 });

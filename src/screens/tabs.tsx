@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { APP } from '../app.config';
-import { fdate, ago, moneyT, plural } from '../lib/format';
+import { USERNAME, USERNAME_RULE, fdate, ago, moneyT, plural, typedUser } from '../lib/format';
 import { friendBal, friends, groupBal, groupOf, hueOf, myTotals, pendingInfo, short, visibleGroups } from '../data/derive';
 import { run } from '../data/store';
 import type { Activity, Group, Snapshot } from '../data/types';
@@ -173,23 +173,28 @@ export function Account({ demo }: { demo: boolean }) {
   const s = useS(), nav = useNav(), me = s.profiles[s.me];
   const [name, setName] = useState(me.name);
   const [payout, setPayout] = useState(me.payout ?? '');
+  const [username, setUsername] = useState(me.username ?? '');
   const [busy, setBusy] = useState(false);
-  const dirty = name.trim() !== me.name || payout.trim() !== (me.payout ?? '');
+  const userOk = !username || USERNAME.test(username);
+  const dirty = name.trim() !== me.name || payout.trim() !== (me.payout ?? '') || username !== (me.username ?? '');
   const save = async () => {
     setBusy(true);
-    try { await run(b => b.updateProfile({ name: name.trim(), payout: payout.trim() })); buzz(); nav.toast('Guardado'); }
+    try { await run(b => b.updateProfile({ name: name.trim(), payout: payout.trim(), username })); buzz(); nav.toast('Guardado'); }
     catch (e) { nav.toast(errMsg(e)); } finally { setBusy(false); }
   };
   return (
     <div className="scroll pad">
       <header className="title-row"><h1>Cuenta</h1></header>
-      <section className="card profile"><Av id={s.me} size="lg" /><div><p className="t">{me.name}</p>{me.email && <p className="s">{me.email}</p>}</div></section>
+      <section className="card profile"><Av id={s.me} size="lg" /><div><p className="t">{me.name}</p>{me.username && <p className="s">@{me.username}</p>}{me.email && <p className="s">{me.email}</p>}</div></section>
       <section className="card form">
         <label>Tu nombre<input className="field" value={name} maxLength={80} onChange={e => setName(e.target.value)} autoComplete="name" enterKeyHint="next" /></label>
+        <label>Usuario<input className="field" value={username} maxLength={20} onChange={e => setUsername(typedUser(e.target.value))} placeholder="Para entrar sin escribir tu correo"
+          autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" /></label>
+        {!userOk && <p className="err">{USERNAME_RULE}</p>}
         <label>Dónde te pagan
           <textarea className="field" value={payout} maxLength={200} onChange={e => setPayout(e.target.value)} placeholder="Ej.: Banco Popular · ahorro · 123456789 · a nombre de …" /></label>
         <p className="note">Lo ve la gente de tus grupos cuando te va a pagar, con un botón para copiarlo.</p>
-        <button className="btn primary tap" disabled={!dirty || !name.trim() || busy} onClick={save}>{busy ? 'Guardando…' : 'Guardar'}</button>
+        <button className="btn primary tap" disabled={!dirty || !name.trim() || !userOk || busy} onClick={save}>{busy ? 'Guardando…' : 'Guardar'}</button>
       </section>
       {!standalone() && <section className="card plain-card">
         <h2>Instala {APP.name}</h2>

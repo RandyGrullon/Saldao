@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { APP } from '../app.config';
-import { UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp } from '../data/supabase';
+import { UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp, usernameAvailable } from '../data/supabase';
+import { USERNAME, USERNAME_RULE, typedUser } from '../lib/format';
 import { Icon } from '../ui/icons';
 import { errMsg } from '../ui/kit';
 
@@ -39,15 +40,30 @@ function PasswordField({ label, value, onChange, autoComplete }: {
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(LINK_ERR);
   const [info, setInfo] = useState('');
   const [resend, setResend] = useState(!!LINK_ERR);
-  const go = (m: typeof mode) => { setMode(m); setMsg(''); setInfo(''); setResend(false); };
+  const [resendTo, setResendTo] = useState(''); // el correo de la cuenta, aunque haya entrado con su usuario
+  const [free, setFree] = useState<boolean | null>(null);
+  const go = (m: typeof mode) => { setMode(m); setMsg(''); setInfo(''); setResend(false); setResendTo(''); };
   const em = email.trim();
-  const valid = em.includes('@') && (mode === 'reset' || (mode === 'login' ? pass.length > 0 : pass.length >= MIN && name.trim().length > 0));
+  const userOk = USERNAME.test(username);
+  const valid = mode === 'login' ? em.length > 0 && pass.length > 0
+    : em.includes('@') && (mode === 'reset' || (pass.length >= MIN && name.trim().length > 0 && userOk && free !== false));
+  const to = resendTo || em;
+
+  // ¿está libre el usuario? Se pregunta cuando deja de escribir.
+  useEffect(() => {
+    setFree(null);
+    if (mode !== 'register' || !userOk) return;
+    let live = true;
+    const t = setTimeout(() => usernameAvailable(username).then(ok => live && setFree(ok), () => {}), 400);
+    return () => { live = false; clearTimeout(t); };
+  }, [mode, username, userOk]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,22 +72,22 @@ export function AuthScreen() {
     try {
       if (mode === 'login') await signIn(em, pass);
       else if (mode === 'register') {
-        const { needsConfirm } = await signUp(name.trim(), em, pass);
-        if (needsConfirm) { setMode('login'); setPass(''); setResend(true); setInfo(`Te enviamos un correo a ${em}. Abre el enlace para activar tu cuenta y luego entra aquí.`); }
+        const { needsConfirm } = await signUp(name.trim(), username, em, pass);
+        if (needsConfirm) { setMode('login'); setPass(''); setResend(true); setResendTo(em); setInfo(`Te enviamos un correo a ${em}. Abre el enlace para activar tu cuenta y luego entra aquí.`); }
       } else {
         await sendPasswordReset(em);
         setInfo(`Si hay una cuenta con ${em}, te llegará un enlace para crear una contraseña nueva. Revisa también spam.`);
       }
     } catch (err) {
       setMsg(errMsg(err));
-      if (err instanceof Error && err.message === UNCONFIRMED) setResend(true);
+      if (err instanceof Error && err.message === UNCONFIRMED) { setResend(true); setResendTo((err as { email?: string }).email ?? ''); }
     } finally { setBusy(false); }
   };
   const again = async () => {
     setBusy(true); setMsg(''); setInfo('');
     try {
-      await resendConfirmation(em);
-      setInfo(`Te enviamos otro correo a ${em}. Abre el enlace para activar tu cuenta. Revisa también spam.`);
+      await resendConfirmation(to);
+      setInfo(`Te enviamos otro correo a ${to}. Abre el enlace para activar tu cuenta. Revisa también spam.`);
     } catch (err) { setMsg(errMsg(err)); } finally { setBusy(false); }
   };
 
@@ -87,9 +103,18 @@ export function AuthScreen() {
       <form className="form" onSubmit={submit} noValidate>
         {mode === 'register' && <label>Tu nombre
           <input className="field" autoComplete="name" autoCapitalize="words" enterKeyHint="next" maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Como te conocen tus amigos" /></label>}
-        <label>Correo
-          <input className="field" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" enterKeyHint={mode === 'reset' ? 'send' : 'next'}
-            value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@correo.com" /></label>
+        {mode === 'register' && <>
+          <label>Usuario
+            <input className="field" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" maxLength={20}
+              value={username} onChange={e => setUsername(typedUser(e.target.value))} placeholder="Para entrar sin escribir tu correo" /></label>
+          {username && (!userOk ? <p className="err">{USERNAME_RULE}</p>
+            : free === false ? <p className="err">Ese usuario ya lo tiene otra persona.</p>
+            : free && <p className="note"><Icon n="check" sm /> @{username} está libre</p>)}
+        </>}
+        <label>{mode === 'login' ? 'Correo o usuario' : 'Correo'}
+          <input className="field" type={mode === 'login' ? 'text' : 'email'} inputMode="email" autoComplete={mode === 'login' ? 'username' : 'email'}
+            autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint={mode === 'reset' ? 'send' : 'next'}
+            value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'login' ? 'tu@correo.com o tu usuario' : 'tu@correo.com'} /></label>
         {mode !== 'reset' && <PasswordField label={mode === 'register' ? `Contraseña (mínimo ${MIN} caracteres)` : 'Contraseña'}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={pass} onChange={setPass} />}
         <button className="btn primary block tap" disabled={busy || !valid}>
@@ -105,7 +130,7 @@ export function AuthScreen() {
       {mode === 'reset' && <button type="button" className="link tap" onClick={() => go('login')}>Volver a entrar</button>}
       {info && <p className="note" role="status">{info}</p>}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {mode === 'login' && resend && <button type="button" className="link tap" disabled={busy || !em.includes('@')} onClick={again}>Reenviar el correo de confirmación</button>}
+      {mode === 'login' && resend && <button type="button" className="link tap" disabled={busy || !to.includes('@')} onClick={again}>Reenviar el correo de confirmación</button>}
     </main>
   );
 }

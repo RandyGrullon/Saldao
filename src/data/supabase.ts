@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Expense, Id } from '../lib/domain';
+import { typedUser } from '../lib/format';
 import type { Activity, Backend, ExpenseInput, Group, InvitePreview, Snapshot } from './types';
 
 let client: SupabaseClient | null = null;
@@ -12,6 +13,7 @@ export const isConfigured = () => !!(import.meta.env.VITE_SUPABASE_URL && import
 
 // ── sesión: correo y contraseña ──────────────────────────────
 export const UNCONFIRMED = 'Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam).';
+const TAKEN = 'Ese usuario ya lo tiene otra persona. Elige otro.';
 // Supabase responde en inglés; estos son los mensajes que una persona puede ver al entrar o registrarse.
 const AUTH_ES: [RegExp, string][] = [
   [/invalid login credentials/i, 'Correo o contraseña incorrectos.'],
@@ -23,18 +25,34 @@ const AUTH_ES: [RegExp, string][] = [
   [/rate limit|too many|security purposes/i, 'Demasiados intentos. Espera un momento y vuelve a intentarlo.'],
   [/signups? not allowed|signup.*disabled/i, 'El registro está cerrado por ahora.'],
   [/invalid.*email|unable to validate email/i, 'Ese correo no parece válido.'],
+  [/database error saving new user/i, TAKEN], // el usuario se lo llevó otra persona en el mismo instante
 ];
 function authError(e: { message: string }) {
   for (const [r, t] of AUTH_ES) { const m = e.message.match(r); if (m) return new Error(t.replace('$1', m[1] ?? '')); }
   return new Error(e.message);
 }
-export async function signIn(email: string, password: string) {
+/** Con correo o con usuario. Con usuario, la base devuelve el correo solo si la contraseña es la correcta. */
+export async function signIn(login: string, password: string) {
+  let email = login;
+  if (!login.includes('@')) {
+    const { data, error } = await sb().rpc('login_email', { p_username: typedUser(login), p_password: password });
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Usuario o contraseña incorrectos.');
+    email = data;
+  }
   const { error } = await sb().auth.signInWithPassword({ email, password });
-  if (error) throw authError(error);
+  // el correo va con el error para poder reenviar la confirmación aunque haya escrito su usuario
+  if (error) throw Object.assign(authError(error), { email });
+}
+export async function usernameAvailable(username: string): Promise<boolean> {
+  const { data, error } = await sb().rpc('username_available', { p_username: username });
+  if (error) throw error;
+  return !!data;
 }
 /** Devuelve si hace falta confirmar el correo antes de entrar (depende de "Confirm email" en Supabase). */
-export async function signUp(name: string, email: string, password: string) {
-  const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: location.origin } });
+export async function signUp(name: string, username: string, email: string, password: string) {
+  if (!(await usernameAvailable(username))) throw new Error(TAKEN);
+  const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name, username }, emailRedirectTo: location.origin } });
   if (error) throw authError(error);
   // con "Confirm email" activo, un correo ya registrado no da error: vuelve un usuario sin identidades
   if (data.user && !data.user.identities?.length) throw authError({ message: 'already registered' });
@@ -96,7 +114,7 @@ export const supabaseBackend: Backend = {
     if (!user) throw new Error('Sesión vencida');
     const c = sb();
     const [profiles, groups, expenses, comments, activity] = await Promise.all([
-      ok<Row[]>(c.from('profiles').select('id, user_id, name, email, payout')),
+      ok<Row[]>(c.from('profiles').select('id, user_id, name, email, payout, username')),
       ok<Row[]>(c.from('groups').select('id, name, kind, currency, invite_token, created_at, group_members(profile_id, role)').is('archived_at', null)),
       ok<Row[]>(c.from('expenses').select('*, expense_payers(profile_id, amount), expense_shares(profile_id, amount)').order('date', { ascending: false }).limit(3000)),
       ok<Row[]>(c.from('comments').select('id, expense_id, profile_id, body, created_at').is('deleted_at', null).order('created_at')),
@@ -106,7 +124,7 @@ export const supabaseBackend: Backend = {
     if (!me) throw new Error('No encontramos tu perfil');
     return {
       me,
-      profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.email, payout: p.payout }])),
+      profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.email, payout: p.payout, username: p.username }])),
       groups: groups.map(toGroup),
       expenses: expenses.map(toExpense),
       comments: comments.map(r => ({ id: r.id, expenseId: r.expense_id, profileId: r.profile_id, body: r.body, createdAt: r.created_at })),
@@ -131,6 +149,10 @@ export const supabaseBackend: Backend = {
   directGroup: other => rpc<Id>('direct_group', { p_other: other }),
   invitePreview: token => rpc<InvitePreview | null>('invite_preview', { p_token: token }),
   joinGroup: (token, as) => rpc<Id>('join_group', { p_token: token, p_as: as }),
-  async updateProfile(p) { await ok(sb().from('profiles').update({ name: p.name, payout: p.payout || null }).eq('id', me!)); },
+  async updateProfile(p) {
+    const { error } = await sb().from('profiles').update({ name: p.name, payout: p.payout || null, username: p.username || null }).eq('id', me!);
+    if (error?.code === '23505') throw new Error(TAKEN);
+    if (error) throw error;
+  },
   async signOut() { await sb().auth.signOut(); },
 };

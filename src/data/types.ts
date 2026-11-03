@@ -1,7 +1,7 @@
 import type { Cents, Expense, Id, Item, SplitMode } from '../lib/domain';
 
 export type GroupKind = 'casa' | 'viaje' | 'pareja' | 'otro' | 'directo';
-export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null }
+export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null }
 export interface Group {
   id: Id; name: string; kind: GroupKind; currency: string; inviteToken: string; createdAt: string;
   members: Id[]; roles: Record<Id, 'admin' | 'miembro'>;
@@ -42,6 +42,6 @@ export interface Backend {
   directGroup(other: Id): Promise<Id>;
   invitePreview(token: string): Promise<InvitePreview | null>;
   joinGroup(token: string, as: Id | null): Promise<Id>;
-  updateProfile(p: { name: string; payout: string }): Promise<void>;
+  updateProfile(p: { name: string; payout: string; username: string }): Promise<void>;
   signOut(): Promise<void>;
 }

@@ -2,7 +2,7 @@
 import { apportion, itemSplit, split, type Cents, type Expense, type Id, type Item } from '../lib/domain';
 import type { Activity, Backend, Comment, Group, Profile, Snapshot, Verb } from './types';
 
-const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout });
+const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout, username: null });
 let profiles: Record<Id, Profile> = {
   me: P('me', 'Carolina Méndez', 'Banco Popular · ahorro · 7734'),
   laura: P('laura', 'Laura Peña', 'Banco Popular · ahorro · 4821'),
@@ -117,7 +117,7 @@ export const demoBackend: Backend = {
     return g.id;
   },
   async addPlaceholder(groupId, name) {
-    const p: Profile = { id: uid('p'), userId: null, name, email: null, payout: null };
+    const p: Profile = { id: uid('p'), userId: null, name, email: null, payout: null, username: null };
     profiles = { ...profiles, [p.id]: p };
     groups = groups.map(g => g.id === groupId ? { ...g, members: [...g.members, p.id], roles: { ...g.roles, [p.id]: 'miembro' } } : g);
     log(groupId, 'miembro_agregado', null, { nombre: name });
@@ -144,6 +144,6 @@ export const demoBackend: Backend = {
     if (!g) throw new Error('La invitación no es válida o expiró');
     return g.id;
   },
-  async updateProfile(p) { profiles = { ...profiles, me: { ...profiles.me, name: p.name, payout: p.payout || null } }; },
+  async updateProfile(p) { profiles = { ...profiles, me: { ...profiles.me, name: p.name, payout: p.payout || null, username: p.username || null } }; },
   async signOut() { location.reload(); },
 };

@@ -51,7 +51,7 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
 2. Crea las tablas. Hay dos formas:
    - **SQL Editor:** pega cada archivo de `supabase/migrations/` en orden (por fecha en el nombre) y dale a Run.
    - **CLI:** corre `npx supabase login`, luego `npx supabase link --project-ref TU_REF` y luego `npm run db:push`; aplica solo las que falten.
-3. Configura Authentication. La app entra con **correo y contraseña** (con "olvidé mi contraseña") y con **Google**:
+3. Configura Authentication. La app entra con **correo o usuario y contraseña** (con "olvidé mi contraseña") y con **Google**. El usuario se elige al crear la cuenta o en Cuenta; para entrar con él, la base entrega el correo solo si la contraseña es la correcta y lo bloquea 15 minutos tras 5 intentos fallidos.
    - **URL Configuration:**
      - *Site URL:* `https://saldao-green.vercel.app`.
      - *Redirect URLs:* `https://saldao-green.vercel.app/**`, `http://localhost:5173/**` y tu IP local con `:5173/**`.
