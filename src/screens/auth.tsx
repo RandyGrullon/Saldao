@@ -93,7 +93,7 @@ export function AuthScreen() {
 
   return (
     <main className="gate">
-      <div><h1>{APP.name}</h1><p className="lead">{APP.description}</p></div>
+      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{APP.name}</h1><p className="lead">{APP.description}</p></div>
       {mode === 'reset' ? <p className="note">Escribe tu correo y te mandamos un enlace para crear una contraseña nueva.</p> : (
         <div className="seg" role="tablist" aria-label="Entrar o crear cuenta">
           <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => go('login')}>Entrar</button>

@@ -36,7 +36,7 @@ export async function signIn(login: string, password: string) {
   let email = login;
   if (!login.includes('@')) {
     const { data, error } = await sb().rpc('login_email', { p_username: typedUser(login), p_password: password });
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
     if (!data) throw new Error('Usuario o contraseña incorrectos.');
     email = data;
   }
@@ -46,7 +46,7 @@ export async function signIn(login: string, password: string) {
 }
 export async function usernameAvailable(username: string): Promise<boolean> {
   const { data, error } = await sb().rpc('username_available', { p_username: username });
-  if (error) throw error;
+  if (error) throw dbError(error);
   return !!data;
 }
 /** Devuelve si hace falta confirmar el correo antes de entrar (depende de "Confirm email" en Supabase). */
@@ -79,10 +79,29 @@ export async function setNewPassword(password: string) {
   if (error) throw authError(error);
 }
 
+// ── errores de la base ───────────────────────────────────────
+// Los mensajes propios de las funciones (en español) se muestran tal cual; los de Postgres, que vienen en inglés y con
+// nombres de tablas, se cambian por uno claro sin detalles internos.
+const DB_ES: Record<string, string> = {
+  '42501': 'No tienes permiso para hacer eso.',
+  '23505': 'Eso ya existe.',
+  '23514': 'Algún dato no es válido. Revísalo e intenta de nuevo.',
+  '22P02': 'Algún dato no es válido. Revísalo e intenta de nuevo.',
+  '22001': 'Un texto es demasiado largo.',
+  'PGRST301': 'Tu sesión venció. Vuelve a entrar.',
+};
+type DbErr = { message?: string; code?: string };
+const english = (m: string) => /permission denied|row-level security|violates|constraint|syntax|relation|column|function|JWT/i.test(m);
+export function dbError(e: DbErr): Error {
+  const m = e.message ?? '';
+  if (m && !english(m) && ['P0001', '22023', '28000', '42501'].includes(e.code ?? '')) return new Error(m);
+  return new Error(DB_ES[e.code ?? ''] ?? 'No se pudo completar. Revisa tu conexión e intenta de nuevo.');
+}
+
 // ── lectura ──────────────────────────────────────────────────
-async function ok<T>(q: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {
+async function ok<T>(q: PromiseLike<{ data: T | null; error: DbErr | null }>): Promise<T> {
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) throw dbError(error);
   return data as T;
 }
 type Row = Record<string, any>;
@@ -152,7 +171,7 @@ export const supabaseBackend: Backend = {
   async updateProfile(p) {
     const { error } = await sb().from('profiles').update({ name: p.name, payout: p.payout || null, username: p.username || null }).eq('id', me!);
     if (error?.code === '23505') throw new Error(TAKEN);
-    if (error) throw error;
+    if (error) throw dbError(error);
   },
   async signOut() { await sb().auth.signOut(); },
 };

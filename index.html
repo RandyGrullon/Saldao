@@ -4,21 +4,43 @@
     <meta charset="UTF-8" />
     <!-- Sin zoom: inputs de 16px, touch-action y maximum-scale. Pedido explícito del producto (afecta accesibilidad). -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f5f7" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1113" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0e0f13" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <!-- El tema elegido en Cuenta, antes de pintar (bloquea a propósito: son pocas líneas). -->
+    <script src="/tema.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Bienvenida mientras arranca la app: la marca sube y se va sola cuando hay algo que mostrar (App.tsx). -->
+    <style>
+      #splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; gap: 14px;
+        background: #0e0f13; color: #f4f1ea; font: 700 26px/1 Unbounded, Sora, system-ui, sans-serif; letter-spacing: -0.03em;
+        transition: opacity .35s ease, visibility .35s; }
+      :root[data-theme="light"] #splash { background: #f6f5f0; color: #121318; }
+      @media (prefers-color-scheme: light) { :root[data-theme="auto"] #splash { background: #f6f5f0; color: #121318; } }
+      #splash.out { opacity: 0; visibility: hidden; }
+      #splash svg { width: 72px; height: 72px; animation: sp-in .5s cubic-bezier(.2, .8, .2, 1) both; }
+      #splash svg rect + rect { transform-origin: 256px 208px; animation: sp-bar .45s .25s cubic-bezier(.2, .8, .2, 1) both; }
+      #splash svg rect + rect + rect { transform-origin: 256px 304px; animation-delay: .38s; }
+      #splash span { animation: sp-in .45s .45s cubic-bezier(.2, .8, .2, 1) both; }
+      @keyframes sp-in { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: none; } }
+      @keyframes sp-bar { from { transform: scaleX(0); } to { transform: none; } }
+      @media (prefers-reduced-motion: reduce) { #splash * { animation: none !important; } }
+    </style>
     <title>Saldao</title>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <svg viewBox="0 0 512 512"><rect width="512" height="512" rx="128" fill="#c8f169" /><rect x="136" y="186" width="240" height="44" rx="22" fill="#0e0f13" /><rect x="136" y="282" width="240" height="44" rx="22" fill="#0e0f13" /></svg>
+      <span>Saldao</span>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

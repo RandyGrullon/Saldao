@@ -56,7 +56,7 @@ export function XferRow({ t, groupId }: { t: Transfer; groupId?: Id }) {
           <span className="pair"><Av id={t.from} size="sm" /><Icon n="right" sm /><Av id={t.to} size="sm" /></span>
           <span className="main"><span className="t">{title}</span>
             <span className="s">{open.length ? `${plural(open.length, 'gasto sin saldar', 'gastos sin saldar')} · desde el ${fdate(since)}` : over ? `Pagó de más el ${fdate(over.e.date)}` : ''}</span></span>
-          <span className="end-wrap"><span className="end"><Money c={t.amount} /></span><span className="more"><Icon n="left" sm className="chev" />Por qué</span></span>
+          <span className="end-wrap"><span className={`end${t.to === s.me ? ' pos' : t.from === s.me ? ' neg' : ''}`}><Money c={t.amount} /></span><span className="more"><Icon n="left" sm className="chev" />Por qué</span></span>
         </summary>
         <ul className="why">{its.map(it => <WhyRow key={it.e.id} it={it} a={t.to} b={t.from} showGroup={!groupId} />)}</ul>
       </details>

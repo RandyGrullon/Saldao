@@ -31,11 +31,13 @@ beforeAll(async () => {
     grant usage on schema auth, public to authenticated;
     grant usage on schema public to anon;
     grant execute on function auth.uid() to authenticated;
-    -- como en Supabase: cada función nueva de public se puede ejecutar desde anon y authenticated
+    -- como en Supabase: cada tabla y función nueva de public queda abierta a anon y authenticated (la migración de
+    -- seguridad lo cierra; aquí se prueba que lo cierra de verdad)
+    alter default privileges in schema public grant all on tables to anon, authenticated;
+    alter default privileges in schema public grant all on sequences to anon, authenticated;
     alter default privileges in schema public grant execute on functions to anon, authenticated;
   `);
   await db.exec(sql);
-  await db.exec(`grant select, insert, update on all tables in schema public to authenticated;`);
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data, encrypted_password) values
     ('${U.ana}', 'ana@ejemplo.do', '{"full_name":"Ana Peña","username":"Ana.Pena"}', 'h:secreto123'), ('${U.beto}', 'beto@ejemplo.do', '{}', ''), ('${U.cris}', 'cris@ejemplo.do', '{}', '');`);
 }, 60000);
@@ -137,7 +139,7 @@ describe('migración', () => {
       [JSON.stringify({ group_id: otro, description: 'x', amount: 100, payers: { [cris]: 100 }, shares: { [cris]: 100 } })])).id);
     const mio = await as(U.beto, async () => (await one('select id from comments where profile_id = $1 limit 1', [beto])).id);
     const r = await as(U.beto, () => db.query('update comments set expense_id = $1 where id = $2', [ajeno, mio]).then(() => 'ok', e => e.message));
-    expect(r).toMatch(/row-level security|violates/);
+    expect(r).toMatch(/permission denied|row-level security|violates/);
   });
 
   it('gastos de dos sin grupo usan un grupo directo reutilizable', async () => {
@@ -183,7 +185,7 @@ describe('usuario para entrar', () => {
   });
 
   it('nadie lee los intentos por la API', async () => {
-    expect(await as(U.ana, () => all('select * from login_attempts'))).toHaveLength(0);
+    await expect(as(U.ana, () => all('select * from login_attempts'))).rejects.toThrow(/permission denied/);
   });
 
   it('cada quien cambia su usuario, con formato válido y sin repetir', async () => {
@@ -191,5 +193,95 @@ describe('usuario para entrar', () => {
     await expect(as(U.beto, () => db.query(`update profiles set username = 'Beto!' where user_id = $1`, [U.beto]))).rejects.toThrow(/check constraint/);
     await as(U.beto, () => db.query(`update profiles set username = 'beto' where user_id = $1`, [U.beto]));
     expect(await anon(() => one('select username_available($1) as ok', ['beto']))).toEqual({ ok: false });
+  });
+});
+
+// Lo que se revisa en el catálogo: si mañana alguien agrega una tabla o función y se le olvida cerrarla, falla aquí.
+describe('seguridad', () => {
+  const anon = async <T>(fn: () => Promise<T>) => {
+    await db.exec('reset role; set role anon;');
+    try { return await fn(); } finally { await db.exec('reset role;'); }
+  };
+  const fromIp = (ip: string) => db.query(`select set_config('request.headers', $1, false)`, [ip ? JSON.stringify({ 'x-real-ip': ip }) : '']);
+  const names = (rows: { n: string }[]) => rows.map(r => r.n).sort();
+  const runnable = (role: string) => all<{ n: string }>(`select p.proname as n from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+    where s.nspname in ('public', 'private') and has_function_privilege($1, p.oid, 'execute')`, [role]).then(names);
+  const writable = (role: string, priv: string) => all<{ n: string }>(`select c.relname as n from pg_class c join pg_namespace s on s.oid = c.relnamespace
+    where s.nspname in ('public', 'private') and c.relkind = 'r' and has_any_column_privilege($1, c.oid, $2)`, [role, priv]).then(names);
+
+  it('todas las tablas de public tienen RLS', async () => {
+    expect(await all(`select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace
+      where s.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`)).toEqual([]);
+  });
+
+  it('cada función con security definer fija su search_path', async () => {
+    expect(await all(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+      where s.nspname in ('public', 'private') and p.prosecdef
+        and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')`)).toEqual([]);
+  });
+
+  it('sin sesión solo se puede entrar y ver si un usuario está libre', async () => {
+    expect(await runnable('anon')).toEqual(['login_email', 'username_available']);
+  });
+
+  it('con sesión, solo las funciones de la app y las que usan las reglas', async () => {
+    expect(await runnable('authenticated')).toEqual([
+      'add_member', 'add_placeholder', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_expense',
+      'direct_group', 'invite_preview', 'is_admin', 'is_member', 'join_group', 'login_email', 'regenerate_invite', 'restore_expense',
+      'save_expense', 'shares_group', 'username_available'].sort());
+  });
+
+  it('nadie escribe directo, salvo comentar y editar su perfil', async () => {
+    for (const p of ['SELECT', 'INSERT', 'UPDATE']) expect(await writable('anon', p)).toEqual([]);
+    expect(await writable('authenticated', 'INSERT')).toEqual(['comments']);
+    expect(await writable('authenticated', 'UPDATE')).toEqual(['comments', 'profiles']);
+    expect(await all(`select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace
+      where s.nspname in ('public', 'private') and c.relkind = 'r'
+        and (has_table_privilege('authenticated', c.oid, 'delete') or has_table_privilege('authenticated', c.oid, 'truncate'))`)).toEqual([]);
+  });
+
+  it('de tu perfil cambias nombre, usuario y dónde te pagan, pero no el correo ni la cuenta dueña', async () => {
+    await expect(as(U.beto, () => db.query(`update profiles set email = 'otro@ejemplo.do' where user_id = $1`, [U.beto]))).rejects.toThrow(/permission denied/);
+    await expect(as(U.beto, () => db.query(`update profiles set user_id = $1 where user_id = $2`, [U.cris, U.beto]))).rejects.toThrow(/permission denied/);
+  });
+
+  it('nombres con caracteres de control y fechas del futuro se rechazan', async () => {
+    await expect(as(U.cris, () => one(`select create_group($1, 'otro')`, ['Hola\u0007mundo']))).rejects.toThrow(/groups_name_limpio/);
+    const g = await as(U.cris, async () => (await one<{ g: string }>(`select create_group('Fechas', 'otro') as g`)).g);
+    const cris = await pid(U.cris);
+    const gasto = { group_id: g, description: 'x', amount: 100, date: '2999-01-01', payers: { [cris]: 100 }, shares: { [cris]: 100 } };
+    await expect(as(U.cris, () => one('select save_expense($1)', [JSON.stringify(gasto)]))).rejects.toThrow(/futuro/);
+  });
+
+  it('ver si un usuario está libre tiene tope por conexión', async () => {
+    await fromIp('10.0.0.1');
+    for (let i = 0; i < 120; i++) await anon(() => one('select username_available($1)', [`libre_${i}`]));
+    await expect(anon(() => one('select username_available($1)', ['otro_mas']))).rejects.toThrow(/muy rápido/);
+    await fromIp('10.0.0.2');
+    expect(await anon(() => one('select username_available($1) as ok', ['otro_mas']))).toEqual({ ok: true });
+  });
+
+  it('probar una contraseña contra muchos usuarios desde una conexión se frena', async () => {
+    await fromIp('10.0.0.3');
+    const login = (u: string) => anon(() => one<{ e: string | null }>('select login_email($1, $2) as e', [u, 'clave']).then(r => r.e));
+    for (let i = 0; i < 30; i++) expect(await login(`persona_${i}`)).toBeNull();
+    await expect(login('beto')).rejects.toThrow(/esta conexión/);
+    await fromIp('');
+  });
+
+  it('probar enlaces de invitación al azar se frena', async () => {
+    const random = () => crypto.randomUUID();
+    for (let i = 0; i < 20; i++) expect((await as(U.cris, () => one('select invite_preview($1) as p', [random()]))).p).toBeNull();
+    await expect(as(U.cris, () => one('select invite_preview($1)', [random()]))).rejects.toThrow(/demasiados enlaces/);
+  });
+
+  it('comentar sin parar se frena', async () => {
+    const g = await as(U.cris, async () => (await one<{ g: string }>(`select create_group('Chat', 'otro') as g`)).g);
+    const cris = await pid(U.cris);
+    const e = await as(U.cris, async () => (await one<{ id: string }>('select save_expense($1) as id',
+      [JSON.stringify({ group_id: g, description: 'x', amount: 100, payers: { [cris]: 100 }, shares: { [cris]: 100 } })])).id);
+    const comment = (n: number) => as(U.cris, () => db.query('insert into comments (expense_id, profile_id, body) values ($1, $2, $3)', [e, cris, `hola ${n}`]));
+    for (let i = 0; i < 60; i++) await comment(i);
+    await expect(comment(60)).rejects.toThrow(/muy rápido/);
   });
 });

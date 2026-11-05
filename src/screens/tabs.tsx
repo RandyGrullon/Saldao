@@ -4,19 +4,22 @@ import { USERNAME, USERNAME_RULE, fdate, ago, moneyT, plural, typedUser } from '
 import { friendBal, friends, groupBal, groupOf, hueOf, myTotals, pendingInfo, short, visibleGroups } from '../data/derive';
 import { run } from '../data/store';
 import type { Activity, Group, Snapshot } from '../data/types';
-import { Icon } from '../ui/icons';
-import { Av, Avs, BalText, Impact, Money, canEdit, errMsg, payText, useAct, useS } from '../ui/kit';
+import { Icon, type IconName } from '../ui/icons';
+import { AnimMoney, Av, BalText, Empty, RowIc, Impact, Money, canEdit, errMsg, payText, useAct, useS } from '../ui/kit';
 import { buzz, useNav } from '../ui/nav';
 import { MySettleSheet } from '../sheets/settle';
 import { NewGroupSheet } from '../sheets/groups';
+import { AddExpenseSheet } from '../sheets/AddExpense';
+import { loadTheme, saveTheme, type ThemeMode } from '../lib/theme';
 
 const KIND: Record<string, string> = { casa: 'Casa', viaje: 'Viaje', pareja: 'Pareja', otro: 'Grupo', directo: 'Entre dos' };
+const KIND_IC: Record<string, IconName> = { casa: 'home', viaje: 'compass', pareja: 'heart', otro: 'users', directo: 'swap' };
 
 export function GroupRow({ g }: { g: Group }) {
   const nav = useNav(), s = useS();
   return (
     <li><button className="row tap" onClick={() => nav.push({ kind: 'group', id: g.id })}>
-      <Avs ids={g.members} />
+      <RowIc n={KIND_IC[g.kind]} tone="accent" />
       <span className="main"><span className="t">{g.name}</span><span className="s">{KIND[g.kind]} · {plural(g.members.length, 'persona', 'personas')}</span></span>
       <BalText c={groupBal(s, g.id)} />
     </button></li>
@@ -26,13 +29,16 @@ export function GroupRow({ g }: { g: Group }) {
 function FirstRun() {
   const nav = useNav();
   return (
-    <section className="card hero">
-      <h2>Empieza con un grupo</h2>
-      <p className="note">El apartamento, el viaje, la pareja. Anota los gastos y {APP.name} te dice quién le debe a quién, por qué y desde cuándo.</p>
-      <button className="btn primary block tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Crear grupo</button>
-    </section>
+    <Empty icon="users" title="Empieza con un grupo"
+      action={<button className="btn primary block tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Crear grupo</button>}>
+      El apartamento, el viaje, la pareja. Anota los gastos y {APP.name} te dice quién le debe a quién, por qué y desde cuándo.
+    </Empty>
   );
 }
+
+const DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const todayLabel = (d = new Date()) => `${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}`;
 
 export function Home() {
   const s = useS(), nav = useNav();
@@ -42,18 +48,21 @@ export function Home() {
   const owe = people.filter(x => x.b < 0).sort((a, b) => a.b - b.b)[0];
   return (
     <div className="scroll pad home">
-      <header className="title-row"><h1>Balance</h1>
-        <button className="me tap" onClick={() => nav.setTab('account')} aria-label="Tu cuenta"><Av id={s.me} /></button></header>
+      <header className="title-row"><div><p className="date">{todayLabel()}</p><h1>Hola, {s.profiles[s.me].name.split(' ')[0]}</h1></div>
+        <button className="round tap" onClick={() => nav.setTab('account')} aria-label="Tu cuenta"><Av id={s.me} size="sm" /></button></header>
       {!visibleGroups(s).length && !people.length ? <FirstRun /> : <>
         <section className="card hero">
-          <p className="lbl">{t.net >= 0 ? 'En total te deben' : 'En total debes'}</p>
-          <p className={`big${t.net > 0 ? ' pos' : ''}`}><Money c={Math.abs(t.net)} sign={t.net > 0} /></p>
-          <div className="split2"><div><span className="lbl">Te deben</span><Money c={t.owed} /></div><div><span className="lbl">Debes</span><Money c={t.owe} /></div></div>
+          <p className="lbl">{t.net > 0 ? 'En total te deben' : t.net < 0 ? 'En total debes' : 'Estás a mano con todo el mundo'}</p>
+          <p className={`big${t.net > 0 ? ' pos' : t.net < 0 ? ' neg' : ''}`}><AnimMoney c={Math.abs(t.net)} sign={t.net > 0} /></p>
+          <div className="split2"><div><span className="lbl">Te deben</span><span className="pos"><Money c={t.owed} /></span></div><div><span className="lbl">Debes</span><span className="neg"><Money c={t.owe} /></span></div></div>
           {(top || owe) && <p className="finding-line">
             {top && <><b>{short(s, top.p)}</b> es quien más te debe: {moneyT(top.b)}{top.i.since ? `, sin saldar desde el ${fdate(top.i.since)}` : ''}. </>}
             {owe && <>A quien más le debes es a <b>{short(s, owe.p)}</b>: {moneyT(-owe.b)}.</>}
           </p>}
-          <button className="btn primary block tap" disabled={!t.owed && !t.owe} onClick={() => nav.openSheet(<MySettleSheet />, 'Saldar cuentas')}>Saldar cuentas</button>
+          <div className="actions">
+            <button className="btn primary tap" onClick={() => nav.openSheet(<AddExpenseSheet />, 'Nuevo gasto', true)}><Icon n="plus" />Añadir gasto</button>
+            <button className="btn tap" disabled={!t.owed && !t.owe} onClick={() => nav.openSheet(<MySettleSheet />, 'Saldar cuentas')}>Saldar cuentas</button>
+          </div>
         </section>
         {people.length > 0 && <>
           <h2 className="sec">Personas <span className="hint">toca para ver por qué</span></h2>
@@ -61,16 +70,16 @@ export function Home() {
             <li key={x.p}><button className={`tile tap${x.b ? '' : ' zero'}`} style={{ '--h': hueOf(s, x.p) ?? 0 } as CSSProperties} onClick={() => nav.push({ kind: 'person', id: x.p })}>
               <Av id={x.p} /><span className="tile-n">{short(s, x.p)}</span>
               <span className="tile-l">{x.b > 0 ? 'te debe' : x.b < 0 ? 'le debes' : 'están a mano'}</span>
-              <span className="tile-v">{x.b ? <Money c={Math.abs(x.b)} sign={x.b > 0} /> : null}</span>
+              <span className={`tile-v${x.b > 0 ? ' pos' : x.b < 0 ? ' neg' : ''}`}>{x.b ? <Money c={Math.abs(x.b)} sign={x.b > 0} /> : null}</span>
               <span className="tile-s">{x.i.n ? `${plural(x.i.n, 'gasto', 'gastos')} sin saldar · desde ${fdate(x.i.since!)}` : 'todo saldado'}</span>
             </button></li>))}</ul>
         </>}
         {visibleGroups(s).length > 0 && <>
-          <h2 className="sec">Grupos <button className="link tap" onClick={() => nav.setTab('groups')}>Ver todos</button></h2>
+          <h2 className="sec">Grupos <button className="link tap" onClick={() => nav.setTab('groups')}>Ver todos<Icon n="chevR" sm /></button></h2>
           <ul className="list card">{visibleGroups(s).slice(0, 4).map(g => <GroupRow key={g.id} g={g} />)}</ul>
         </>}
         {s.activity.length > 0 && <>
-          <h2 className="sec">Reciente <button className="link tap" onClick={() => nav.setTab('activity')}>Actividad</button></h2>
+          <h2 className="sec">Reciente <button className="link tap" onClick={() => nav.setTab('activity')}>Actividad<Icon n="chevR" sm /></button></h2>
           <ul className="list card">{s.activity.slice(0, 4).map(a => <EvRow key={a.id} a={a} />)}</ul>
         </>}
       </>}
@@ -84,7 +93,7 @@ export function Groups() {
   return (
     <div className="scroll pad">
       <header className="title-row"><h1>Grupos</h1>
-        <button className="btn sm tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Nuevo</button></header>
+        <button className="btn sm soft tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Nuevo</button></header>
       {visibleGroups(s).length ? <ul className="list card">{visibleGroups(s).map(g => <GroupRow key={g.id} g={g} />)}</ul> : <FirstRun />}
       {duo.length > 0 && <>
         <h2 className="sec">Entre dos</h2>
@@ -158,7 +167,7 @@ export function ActivityTab({ unread }: { unread: ReturnType<typeof useUnread> }
       <header className="title-row"><h1>Actividad</h1></header>
       {toConfirm.length > 0 && <p className="note"><b>{plural(toConfirm.length, 'pago espera', 'pagos esperan')}</b> que confirmes que te llegaron.</p>}
       {s.activity.length ? <ul className="list card">{s.activity.map(a => <EvRow key={a.id} a={a} fresh={a.actor !== s.me && a.createdAt > unread.seen} />)}</ul>
-        : <p className="note center">Aquí verás cada gasto, pago y comentario de tus grupos.</p>}
+        : <Empty icon="bell" title="Todavía no hay movimiento">Aquí verás cada gasto, pago y comentario de tus grupos.</Empty>}
     </div>
   );
 }
@@ -175,6 +184,7 @@ export function Account({ demo }: { demo: boolean }) {
   const [payout, setPayout] = useState(me.payout ?? '');
   const [username, setUsername] = useState(me.username ?? '');
   const [busy, setBusy] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(loadTheme);
   const userOk = !username || USERNAME.test(username);
   const dirty = name.trim() !== me.name || payout.trim() !== (me.payout ?? '') || username !== (me.username ?? '');
   const save = async () => {
@@ -203,8 +213,13 @@ export function Account({ demo }: { demo: boolean }) {
           : <p className="s">{isIOS() ? 'En Safari toca Compartir y luego «Agregar a inicio».' : 'En el menú del navegador elige «Instalar app» o «Agregar a la pantalla de inicio».'}</p>}
       </section>}
       <dl className="list card prefs">
+        <div className="theme"><dt>Tema</dt>
+          <dd className="seg" role="radiogroup" aria-label="Tema">
+            {([['dark', 'De noche', 'moon'], ['light', 'Claro', 'sun'], ['auto', 'Auto', 'phone']] as const).map(([k, l, ic]) => (
+              <button key={k} className="tap" role="radio" aria-checked={theme === k} aria-label={k === 'auto' ? 'Como el teléfono' : l}
+                onClick={() => { setTheme(k); saveTheme(k); buzz(); }}><Icon n={ic} sm />{l}</button>))}
+          </dd></div>
         <div><dt>Moneda principal</dt><dd>Peso dominicano (RD$)</dd></div>
-        <div><dt>Tema</dt><dd>Según el sistema</dd></div>
         <div><dt>Idioma</dt><dd>Español</dd></div>
       </dl>
       <button className="btn danger block tap" onClick={() => run(b => b.signOut()).catch(() => location.reload())}><Icon n="out" sm />{demo ? 'Reiniciar demostración' : 'Cerrar sesión'}</button>

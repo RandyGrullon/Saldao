@@ -4,6 +4,8 @@ Saldao es una PWA para dividir gastos con amigos, la pareja, el apartamento o un
 
 Está hecha solo para el teléfono: se instala, abre a pantalla completa y se comporta como una app nativa. No hace zoom, la página no rebota, tiene gestos de volver y hojas que se arrastran.
 
+**Estilo «De noche»:** oscuro de base, lima para lo que te deben y coral para lo que debes, títulos y saldos en Unbounded y el resto en Sora. En Cuenta › Tema se elige De noche, Claro o Auto (como el teléfono). La distribución y el movimiento vienen de MatchMate: título grande, una tarjeta principal con el saldo y «Añadir gasto», secciones con «Ver todos», barra de abajo con cuatro secciones, pantallas y listas que entran en cascada, saldos que cuentan hasta su valor y esqueletos mientras carga.
+
 ## Qué hace
 
 **Grupos y personas**
@@ -61,12 +63,31 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
      - verifica tu dominio;
      - en *Project Settings → Authentication → SMTP* pon `smtp.resend.com`, puerto 465, usuario `resend` y tu API key como contraseña;
      - remitente: `no-reply@tu-dominio`.
+   - **Rate Limits y Attack Protection:** deja los límites de correos, entradas y registros por IP que trae Supabase; si llegan bots, activa el captcha (Turnstile).
    - **Email Templates:** la cuenta se confirma con un enlace, no con código. En *Confirm signup* y *Reset password* pega el asunto y el HTML de `supabase/templates/confirmar.html` y `recuperar.html` (los asuntos están en `supabase/config.toml`).
    - **Google:**
      - En Google Cloud crea un *OAuth client ID* de tipo Web.
      - *Authorized redirect URI:* `https://<tu-ref>.supabase.co/auth/v1/callback`.
      - Pega el Client ID y el Secret en *Sign In / Providers → Google*.
 4. Arranca con `npm run dev`. Para probar en el teléfono, abre `http://TU-IP:5173` en la misma red wifi.
+
+## Seguridad
+
+- **Base cerrada por defecto** (`supabase/migrations/20261105000000_seguridad.sql`):
+  - las tablas solo se leen, con RLS;
+  - escribir directo solo se puede al comentar y al editar tu nombre, usuario y dónde te pagan;
+  - todo lo demás pasa por funciones que validan;
+  - cada función nueva nace cerrada y solo se abre con su nombre en la lista.
+- **Límites de intentos** que no se saltan con peticiones en paralelo:
+  - ver si un usuario está libre y entrar con usuario: por conexión;
+  - gastos, grupos, personas sin cuenta, comentarios y enlaces de invitación: por persona;
+  - además, un usuario se bloquea tras 5 contraseñas malas.
+- **Datos limpios:** sin caracteres de control en nombres y textos, JSON con tamaño tope y fechas razonables.
+- **En el navegador:**
+  - política de contenido (CSP) y cabeceras de seguridad en `vercel.json`;
+  - los errores de la base se muestran en español y sin detalles internos;
+  - si una pantalla se rompe, sale un aviso en vez de la pantalla en blanco;
+  - el enlace de invitación solo se acepta con su forma.
 
 ## Tests
 
@@ -83,7 +104,9 @@ Hay dos suites:
   - que solo quien recibe un pago lo confirme;
   - borrar y restaurar;
   - comentarios;
-  - grupos de a dos.
+  - grupos de a dos;
+  - entrar con usuario y su bloqueo;
+  - seguridad: que toda tabla tenga RLS, que la lista de funciones y permisos abiertos sea exacta y que los límites frenen.
 
 ## Documentos
 

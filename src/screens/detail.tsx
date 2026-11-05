@@ -5,7 +5,7 @@ import { fday, fdate, ftime, ago, moneyT, plural } from '../lib/format';
 import { byNewest, debts, friendBal, groupBal, groupOf, listOf, mineOf, pendingInfo, sharedGroups, short, spent } from '../data/derive';
 import { run } from '../data/store';
 import { Icon } from '../ui/icons';
-import { Av, Avs, ExpRow, ItemStatus, Money, Pill, WhyRow, canEdit, errMsg, payText, useAct, useS } from '../ui/kit';
+import { AnimMoney, Av, Avs, Empty, ExpRow, ItemStatus, Money, Pill, WhyRow, canEdit, errMsg, payText, useAct, useS } from '../ui/kit';
 import { buzz, useNav } from '../ui/nav';
 import { AddExpenseSheet } from '../sheets/AddExpense';
 import { InviteSheet } from '../sheets/groups';
@@ -28,11 +28,11 @@ export function GroupScreen({ id }: { id: Id }) {
         <header className="head"><Avs ids={g.members} /><h1>{g.name}</h1><p className="meta">{plural(g.members.length, 'persona', 'personas')}</p></header>
         <section className="card hero">
           <p className="lbl">{me > 0 ? 'En este grupo te deben' : me < 0 ? 'En este grupo debes' : 'En este grupo estás a mano'}</p>
-          <p className={`big${me > 0 ? ' pos' : ''}`}><Money c={Math.abs(me)} sign={me > 0} /></p>
+          <p className={`big${me > 0 ? ' pos' : me < 0 ? ' neg' : ''}`}><AnimMoney c={Math.abs(me)} sign={me > 0} /></p>
           <p className="note">Gastado entre todos: {moneyT(spent(list))} · {d.length ? plural(d.length, 'deuda abierta', 'deudas abiertas') : 'nadie le debe a nadie'}</p>
           <div className="actions">
-            <button className="btn primary tap" disabled={!d.length} onClick={() => nav.openSheet(<SettleSheet groupId={id} />, 'Saldar')}>Saldar</button>
-            <button className="btn tap" onClick={() => nav.openSheet(<AddExpenseSheet groupId={id} />, 'Nuevo gasto', true)}><Icon n="plus" sm />Gasto</button>
+            <button className="btn primary tap" onClick={() => nav.openSheet(<AddExpenseSheet groupId={id} />, 'Nuevo gasto', true)}><Icon n="plus" />Añadir gasto</button>
+            <button className="btn tap" disabled={!d.length} onClick={() => nav.openSheet(<SettleSheet groupId={id} />, 'Saldar')}>Saldar</button>
           </div>
         </section>
         {g.members.length < 2 && <section className="card plain-card"><h2>Falta gente</h2><p className="s">Invita a los demás con el enlace del grupo o agrégalos por nombre.</p>
@@ -47,7 +47,7 @@ export function GroupScreen({ id }: { id: Id }) {
             <h3 className="day">{fday(day)}</h3>
             <ul className="list card">{list.filter(e => e.date === day).map(e => <ExpRow key={e.id} e={e} />)}</ul>
           </div>
-        )) : <p className="note">Todavía no hay gastos. Toca «Gasto» para anotar el primero.</p>}
+        )) : <Empty icon="receipt" title="Todavía no hay gastos">Toca «Añadir gasto» para anotar el primero.</Empty>}
       </div>
     </>
   );
@@ -71,14 +71,14 @@ export function PersonScreen({ id }: { id: Id }) {
         <header className="head"><Av id={id} size="lg" /><h1>{p.name}</h1>{!p.userId && <p className="meta">Todavía no tiene cuenta: mándale el enlace del grupo.</p>}</header>
         <section className="card hero">
           <p className="lbl">{b > 0 ? `${short(s, id)} te debe` : b < 0 ? `Le debes a ${short(s, id)}` : 'Están a mano'}</p>
-          <p className={`big${b > 0 ? ' pos' : ''}`}><Money c={Math.abs(b)} sign={b > 0} /></p>
+          <p className={`big${b > 0 ? ' pos' : b < 0 ? ' neg' : ''}`}><AnimMoney c={Math.abs(b)} sign={b > 0} /></p>
           {b !== 0 && info.n > 0 && <p className="note">{plural(info.n, 'gasto sin saldar', 'gastos sin saldar')}, el más viejo del {fday(info.since!).toLowerCase()}</p>}
           {Object.keys(by).length > 1 && <ul className="breakdown">{Object.entries(by).map(([g, x]) => (
             <li key={g}><span>{groupOf(s, g)?.kind === 'directo' ? 'Entre ustedes dos' : groupOf(s, g)?.name}</span><Money c={x} sign /></li>))}</ul>}
           <div className="actions">
             {b < 0 && <button className="btn primary tap" onClick={() => nav.openSheet(<PaySheet to={id} amount={-b} />, 'Pagar')}>Pagar</button>}
             {b > 0 && <><button className="btn primary tap" onClick={() => remind(s, id, b)}>Recordar</button><button className="btn tap" onClick={gotPaid}>Me pagó</button></>}
-            <button className="btn tap" onClick={() => nav.openSheet(<AddExpenseSheet friendId={id} />, 'Nuevo gasto', true)}><Icon n="plus" sm />Gasto</button>
+            <button className={`btn tap${b ? '' : ' primary'}`} onClick={() => nav.openSheet(<AddExpenseSheet friendId={id} />, 'Nuevo gasto', true)}><Icon n="plus" sm />{b ? 'Gasto' : 'Añadir gasto'}</button>
           </div>
         </section>
         {p.payout && <section className="card plain-card"><h2>Dónde pagarle</h2><p className="t" style={{ userSelect: 'text' }}>{p.payout}</p>
@@ -93,7 +93,7 @@ export function PersonScreen({ id }: { id: Id }) {
               <ul className="list card why">{[...its].reverse().map(it => <WhyRow key={it.e.id} it={it} a={s.me} b={id} />)}</ul>
             </div>) : null;
         })}
-        {!gs.some(g => ledger(s.me, id, listOf(s, g)).length) && <p className="note">Todavía no comparten gastos.</p>}
+        {!gs.some(g => ledger(s.me, id, listOf(s, g)).length) && <Empty icon="receipt" title="Todavía no comparten gastos" />}
       </div>
     </>
   );
