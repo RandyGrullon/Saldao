@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { APP } from '../app.config';
-import { DELETED, UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp, usernameAvailable } from '../data/supabase';
-import { USERNAME, USERNAME_RULE, typedUser } from '../lib/format';
+import { APP, typedUser, USERNAME, USERNAME_RULE } from '@saldao/core';
+import { resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp, UNCONFIRMED, usernameAvailable } from '@saldao/core/supabase';
+import { DELETED } from '../data/connect';
 import { Icon } from '../ui/icons';
 import { errMsg } from '../ui/kit';
 import { LegalLinks } from './legal';

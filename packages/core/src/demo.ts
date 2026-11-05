@@ -1,5 +1,6 @@
 // Backend de demostración: los datos del prototipo en memoria. `npm run dev:demo`.
-import { apportion, itemSplit, split, type Cents, type Expense, type Id, type Item } from '../lib/domain';
+// Salir o borrar la cuenta llama a `onExit` (en la web, recargar la página: vuelve a empezar).
+import { apportion, itemSplit, split, type Cents, type Expense, type Id, type Item } from './domain';
 import type { Activity, Backend, Comment, Group, Profile, Snapshot, Verb } from './types';
 
 const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout, username: null, deletedAt: null });
@@ -79,7 +80,7 @@ const log = (groupId: Id, verb: Verb, expenseId: Id | null = null, payload: Reco
   activity.push(A(groupId, 'me', verb, expenseId, now(), payload));
 const uid = (p: string) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export const demoBackend: Backend = {
+export const createDemoBackend = (onExit: () => void): Backend => ({
   async load(): Promise<Snapshot> {
     return { me: 'me', profiles: { ...profiles }, groups: groups.map(g => ({ ...g })), expenses: [...expenses], comments: [...comments],
       activity: [...activity].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), legalOk: true };
@@ -146,6 +147,6 @@ export const demoBackend: Backend = {
   },
   async updateProfile(p) { profiles = { ...profiles, me: { ...profiles.me, name: p.name, payout: p.payout || null, username: p.username || null } }; },
   async acceptLegal() {},
-  async deleteAccount() { location.reload(); }, // en la demostración, borrar es volver a empezar
-  async signOut() { location.reload(); },
-};
+  async deleteAccount() { onExit(); }, // en la demostración, borrar es volver a empezar
+  async signOut() { onExit(); },
+});

@@ -1,10 +1,5 @@
 import { useState } from 'react';
-import { CATS, cat, guessCat } from '../lib/categories';
-import { apportion, itemSplit, split, sum, type Expense, type Id, type SplitMode } from '../lib/domain';
-import { curSym, moneyT, parseMoney, plural, today, typed } from '../lib/format';
-import { friends, groupOf, short, visibleGroups } from '../data/derive';
-import { run } from '../data/store';
-import type { Snapshot } from '../data/types';
+import { apportion, cat, CATS, curSym, friends, groupOf, guessCat, itemSplit, moneyT, parseMoney, plural, run, short, split, sum, today, typed, visibleGroups, type Expense, type Id, type Snapshot, type SplitMode } from '@saldao/core';
 import { Icon } from '../ui/icons';
 import { Av, Money, errMsg, useS } from '../ui/kit';
 import { SheetHead, buzz, useNav } from '../ui/nav';

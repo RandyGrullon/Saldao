@@ -1,35 +1,14 @@
 import { useState } from 'react';
-import { nets, simplify, type Id, type Transfer } from '../lib/domain';
-import { fdate, moneyT, parseMoney, plural, today } from '../lib/format';
-import { allDebts, debts, friends, friendBal, groupOf, listOf, short, whyItems } from '../data/derive';
-import { run } from '../data/store';
-import type { Backend, Snapshot } from '../data/types';
+import { debts, fdate, friendBal, friends, groupOf, listOf, nets, parseMoney, plural, recordPay, reminderText, run, short, simplify, whyItems, type Id, type Snapshot, type Transfer } from '@saldao/core';
 import { Icon } from '../ui/icons';
 import { Av, Money, WhyRow, errMsg, useS } from '../ui/kit';
 import { SheetHead, buzz, useNav } from '../ui/nav';
 
 /** Registra un pago. Sin grupo, lo reparte entre los grupos donde hay deuda (de la más grande a la más chica). */
-export async function recordPay(b: Backend, s: Snapshot, from: Id, to: Id, amount: number, groupId?: Id, method: 'transferencia' | 'efectivo' = 'transferencia') {
-  const save = (g: Id, x: number) => b.saveExpense({ groupId: g, description: 'Pago', category: 'pago', date: today(), currency: 'DOP', amount: x, fxRate: 1,
-    splitMode: 'payment', splitParams: { method }, items: null, tax: 0, tip: 0, note: null, repeat: null, payers: { [from]: x }, shares: { [to]: x }, isPayment: true });
-  if (groupId) return [await save(groupId, amount)];
-  const ids: Id[] = [];
-  let rest = amount;
-  for (const t of allDebts(s).filter(t => t.from === from && t.to === to).sort((a, c) => c.amount - a.amount)) {
-    if (rest <= 0) break;
-    const x = Math.min(rest, t.amount);
-    ids.push(await save(t.groupId, x));
-    rest -= x;
-  }
-  if (rest > 0) ids.push(await save(await b.directGroup(from === s.me ? to : from), rest));
-  return ids;
-}
 
 /** Recordatorio amable por WhatsApp (o lo que el teléfono ofrezca para compartir). */
 export async function remind(s: Snapshot, p: Id, amount: number) {
-  const open = whyItems(s, s.me, p).filter(it => it.left && !it.e.isPayment && it.x > 0);
-  const lines = open.slice(0, 5).map(it => `• ${it.e.description} (${fdate(it.e.date)}): ${moneyT(it.left)}`).join('\n');
-  const text = `Hola ${short(s, p)}, según Saldao tenemos pendiente ${moneyT(amount)}:\n${lines}${open.length > 5 ? '\n…' : ''}\n\n${s.profiles[s.me]?.payout ? `Me puedes pagar a: ${s.profiles[s.me].payout}` : ''}`.trim();
+  const text = reminderText(s, p, amount);
   if (navigator.share) { try { await navigator.share({ text }); return; } catch { /* cancelado */ return; } }
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
 }

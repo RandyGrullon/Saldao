@@ -1,6 +1,7 @@
-import type { IconName } from '../ui/icons';
+// El ícono es un nombre: cada app lo dibuja con su juego de íconos (la web revisa al compilar que existan todos).
+export type CatIcon = 'home' | 'bolt' | 'drop' | 'wifi' | 'cart' | 'food' | 'fuel' | 'car' | 'bed' | 'compass' | 'heart' | 'gift' | 'receipt' | 'swap';
 
-export const CATS: Record<string, { name: string; icon: IconName }> = {
+export const CATS: Record<string, { name: string; icon: CatIcon }> = {
   alquiler: { name: 'Alquiler', icon: 'home' },
   luz: { name: 'Luz', icon: 'bolt' },
   agua: { name: 'Agua', icon: 'drop' },

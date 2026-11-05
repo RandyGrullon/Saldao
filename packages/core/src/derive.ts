@@ -1,5 +1,6 @@
-import { ledger, nets, pairTransfers, toBase, type Expense, type Id, type LedgerItem } from '../lib/domain';
-import type { Snapshot } from './types';
+import { involves, ledger, nets, pairTransfers, pairVal, toBase, type Expense, type Id, type LedgerItem } from './domain';
+import { fdate, moneyT, today } from './format';
+import type { Backend, Snapshot } from './types';
 
 export const live = (s: Snapshot) => s.expenses.filter(e => !e.deletedAt);
 export const listOf = (s: Snapshot, g: Id) => live(s).filter(e => e.groupId === g);
@@ -63,4 +64,50 @@ export function whyItems(s: Snapshot, a: Id, b: Id, g?: Id): (LedgerItem & { gro
   const gs = g ? [g] : sharedGroups(s, a, b);
   return gs.flatMap(x => ledger(a, b, listOf(s, x)).map(it => ({ ...it, groupId: x })))
     .sort((p, q) => q.e.date.localeCompare(p.e.date) || q.e.createdAt.localeCompare(p.e.createdAt));
+}
+
+/** Quién puede editar o borrar un gasto: quien lo creó, quien participa o quien administra el grupo. */
+export const canEdit = (s: Snapshot, e: Expense) =>
+  e.createdBy === s.me || involves(e, s.me) || groupOf(s, e.groupId)?.roles[s.me] === 'admin';
+
+/** ¿Ya se saldó tu parte de este gasto? Con cuántas personas de cuántas. */
+export function myStatus(s: Snapshot, e: Expense) {
+  if (e.isPayment) return null;
+  const ks = [...new Set([...Object.keys(e.payers), ...Object.keys(e.shares)])].filter(k => k !== s.me && pairVal(e, s.me, k));
+  if (!ks.length) return null;
+  const done = ks.filter(k => !ledger(s.me, k, listOf(s, e.groupId)).find(it => it.e.id === e.id)?.left).length;
+  return done ? { done, total: ks.length } : null;
+}
+
+export function paidText(s: Snapshot, e: Expense) {
+  const ps = Object.keys(e.payers);
+  if (ps.length > 1) return `Pagaron ${ps.map(k => (k === s.me ? 'tú' : short(s, k))).join(' y ')}`;
+  return ps[0] === s.me ? `Pagaste ${moneyT(e.amount, e.currency)}` : `${short(s, ps[0])} pagó ${moneyT(e.amount, e.currency)}`;
+}
+
+/**
+ * Anota un pago. Con grupo, va a ese grupo; sin grupo, se reparte entre las deudas de mayor a menor y lo que sobre
+ * queda en el grupo «entre dos».
+ */
+export async function recordPay(b: Backend, s: Snapshot, from: Id, to: Id, amount: number, groupId?: Id, method: 'transferencia' | 'efectivo' = 'transferencia') {
+  const save = (g: Id, x: number) => b.saveExpense({ groupId: g, description: 'Pago', category: 'pago', date: today(), currency: 'DOP', amount: x, fxRate: 1,
+    splitMode: 'payment', splitParams: { method }, items: null, tax: 0, tip: 0, note: null, repeat: null, payers: { [from]: x }, shares: { [to]: x }, isPayment: true });
+  if (groupId) return [await save(groupId, amount)];
+  const ids: Id[] = [];
+  let rest = amount;
+  for (const t of allDebts(s).filter(t => t.from === from && t.to === to).sort((a, c) => c.amount - a.amount)) {
+    if (rest <= 0) break;
+    const x = Math.min(rest, t.amount);
+    ids.push(await save(t.groupId, x));
+    rest -= x;
+  }
+  if (rest > 0) ids.push(await save(await b.directGroup(from === s.me ? to : from), rest));
+  return ids;
+}
+
+/** El recordatorio amable que se manda por WhatsApp: lo pendiente (hasta cinco gastos) y dónde pagarte. */
+export function reminderText(s: Snapshot, p: Id, amount: number) {
+  const open = whyItems(s, s.me, p).filter(it => it.left && !it.e.isPayment && it.x > 0);
+  const lines = open.slice(0, 5).map(it => `• ${it.e.description} (${fdate(it.e.date)}): ${moneyT(it.left)}`).join('\n');
+  return `Hola ${short(s, p)}, según Saldao tenemos pendiente ${moneyT(amount)}:\n${lines}${open.length > 5 ? '\n…' : ''}\n\n${s.profiles[s.me]?.payout ? `Me puedes pagar a: ${s.profiles[s.me].payout}` : ''}`.trim();
 }

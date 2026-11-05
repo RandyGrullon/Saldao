@@ -1,0 +1,2 @@
+# Generado y comparado byte a byte en las pruebas: siempre con saltos de línea LF, también en Windows.
+packages/core/src/database.types.ts text eol=lf

@@ -3,17 +3,22 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite --host",
     "dev:demo": "vite --host --mode demo",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
     "icons": "pwa-assets-generator",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "typecheck": "tsc --noEmit",
+    "db:types": "vitest run supabase/tests/db-types.test.ts -u"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.109.0",
+    "@saldao/core": "*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

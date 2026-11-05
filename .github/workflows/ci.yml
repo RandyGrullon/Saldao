@@ -1,0 +1,31 @@
+# En cada subida a main y en cada pull request: tipos, pruebas (reglas de dinero, migraciones en Postgres, tipos de la
+# base al día, núcleo sin navegador) y que la web compile. Vercel publica aparte; esto avisa si algo se rompió.
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probar:
+    name: Tipos, pruebas y compilación
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx vite build

@@ -15,5 +15,5 @@
     "allowImportingTsExtensions": false,
     "types": ["vite/client", "vite-plugin-pwa/client", "node"]
   },
-  "include": ["src", "vite.config.ts", "supabase/tests"]
+  "include": ["src", "packages/core/src", "vite.config.ts", "supabase/tests"]
 }

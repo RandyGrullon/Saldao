@@ -1,0 +1,15 @@
+{
+  "name": "@saldao/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lo que comparten la web y la app nativa: reglas de dinero, saldos, formatos, datos y la conexión con Supabase.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./supabase": "./src/supabase.ts",
+    "./demo": "./src/demo.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0"
+  }
+}

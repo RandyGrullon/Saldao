@@ -1,13 +1,12 @@
 // Corre la migración real en PGlite (Postgres en WASM) con un "auth" mínimo de imitación,
 // y prueba las reglas que importan: RLS, que los gastos cuadren, permisos y reclamar un marcador.
-import { PGlite } from '@electric-sql/pglite';
-import { readdirSync, readFileSync } from 'node:fs';
+import type { PGlite } from '@electric-sql/pglite';
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { LEGAL_VERSION } from '../../packages/core/src/legal';
+import { migratedDb } from './db';
 
-// Todas las migraciones, en orden, como las aplica Supabase.
-const dir = new URL('../migrations/', import.meta.url);
-const sql = readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join(';\n');
-const db = new PGlite();
+let db: PGlite;
 const U = { ana: '00000000-0000-0000-0000-00000000000a', beto: '00000000-0000-0000-0000-00000000000b', cris: '00000000-0000-0000-0000-00000000000c', dani: '00000000-0000-0000-0000-00000000000d' };
 
 async function as<T>(user: string | null, fn: () => Promise<T>): Promise<T> {
@@ -20,24 +19,7 @@ const all = async <T = any>(q: string, p: unknown[] = []) => (await db.query<T>(
 const pid = (u: string) => one<{ id: string }>('select id from profiles where user_id = $1', [u]).then(r => r.id);
 
 beforeAll(async () => {
-  await db.exec(`
-    create role authenticated; create role anon;
-    create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', encrypted_password text default '');
-    -- PGlite no trae pgcrypto: un crypt de imitación que se usa igual (hash = crypt(clave, hash))
-    create schema extensions;
-    create function extensions.crypt(p text, salt text) returns text language sql immutable as $$ select 'h:' || p $$;
-    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
-    grant usage on schema auth, public to authenticated;
-    grant usage on schema public to anon;
-    grant execute on function auth.uid() to authenticated;
-    -- como en Supabase: cada tabla y función nueva de public queda abierta a anon y authenticated (la migración de
-    -- seguridad lo cierra; aquí se prueba que lo cierra de verdad)
-    alter default privileges in schema public grant all on tables to anon, authenticated;
-    alter default privileges in schema public grant all on sequences to anon, authenticated;
-    alter default privileges in schema public grant execute on functions to anon, authenticated;
-  `);
-  await db.exec(sql);
+  db = await migratedDb();
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data, encrypted_password) values
     ('${U.ana}', 'ana@ejemplo.do', '{"full_name":"Ana Peña","username":"Ana.Pena"}', 'h:secreto123'), ('${U.beto}', 'beto@ejemplo.do', '{}', ''), ('${U.cris}', 'cris@ejemplo.do', '{}', '');`);
 }, 60000);
@@ -297,8 +279,7 @@ describe('términos, privacidad y borrar la cuenta', () => {
 
   it('la versión es la misma en la base, la app y las dos páginas', async () => {
     const v = await version();
-    const app = readFileSync(new URL('../../src/lib/legal.ts', import.meta.url), 'utf8');
-    expect(app).toContain(`LEGAL_VERSION = '${v}'`);
+    expect(LEGAL_VERSION).toBe(v);
     for (const page of ['terminos', 'privacidad'])
       expect(readFileSync(new URL(`../../public/${page}.html`, import.meta.url), 'utf8')).toContain(`Versión ${v}`);
   });

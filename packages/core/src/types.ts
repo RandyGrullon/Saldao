@@ -1,4 +1,4 @@
-import type { Cents, Expense, Id, Item, SplitMode } from '../lib/domain';
+import type { Cents, Expense, Id, Item, SplitMode } from './domain';
 
 export type GroupKind = 'casa' | 'viaje' | 'pareja' | 'otro' | 'directo';
 export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null; deletedAt: string | null }

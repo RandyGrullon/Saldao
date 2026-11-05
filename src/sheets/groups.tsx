@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Id } from '../lib/domain';
-import { friends, groupOf, short } from '../data/derive';
-import { run } from '../data/store';
-import type { GroupKind, InvitePreview } from '../data/types';
-import { getBackend } from '../data/store';
+import { friends, getBackend, groupOf, inviteLink, run, short, type GroupKind, type Id, type InvitePreview } from '@saldao/core';
 import { clearInvite } from '../lib/invite';
 import { Icon } from '../ui/icons';
 import { Av, errMsg, useS } from '../ui/kit';
 import { SheetHead, buzz, useNav } from '../ui/nav';
 
 const KINDS: [GroupKind, string][] = [['casa', 'Casa'], ['viaje', 'Viaje'], ['pareja', 'Pareja'], ['otro', 'Otro']];
-export const inviteLink = (token: string) => `${location.origin}/?unirse=${token}`;
 
 export function NewGroupSheet() {
   const s = useS(), nav = useNav();
@@ -67,7 +62,7 @@ export function InviteSheet({ groupId }: { groupId: Id }) {
   const s = useS(), nav = useNav(), g = groupOf(s, groupId);
   const [draft, setDraft] = useState('');
   if (!g) return null;
-  const link = inviteLink(g.inviteToken);
+  const link = inviteLink(location.origin, g.inviteToken);
   const others = friends(s).filter(p => !g.members.includes(p) && !s.profiles[p].deletedAt);
   const share = async () => {
     const text = `Únete a «${g.name}» en Saldao para llevar las cuentas claras:`;

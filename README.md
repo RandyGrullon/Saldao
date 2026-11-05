@@ -103,8 +103,8 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
 npm test
 ```
 
-Hay dos suites:
-- `src/lib/domain.test.ts` prueba las reglas de dinero: repartos con centavos justos, ítems con ITBIS y ley, multimoneda, saldos por pareja y estados del "por qué".
+Corren en cada subida a GitHub (`.github/workflows/ci.yml`): tipos, pruebas y compilación. Hay cuatro suites:
+- `packages/core/src/domain.test.ts` prueba las reglas de dinero: repartos con centavos justos, ítems con ITBIS y ley, multimoneda, saldos por pareja y estados del "por qué".
 - `supabase/tests/migration.test.ts` corre la migración real en Postgres (PGlite). Prueba:
   - RLS: nadie ve grupos ajenos y nadie escribe directo en las tablas;
   - que los gastos cuadren;
@@ -115,6 +115,20 @@ Hay dos suites:
   - grupos de a dos;
   - entrar con usuario y su bloqueo;
   - seguridad: que toda tabla tenga RLS, que la lista de funciones y permisos abiertos sea exacta y que los límites frenen.
+- `supabase/tests/db-types.test.ts` revisa que los tipos de la base estén al día con las migraciones (ver abajo).
+- `packages/core/src/core.test.ts` revisa que el núcleo no use nada del navegador, de Vite ni de React.
+
+### Tipos de la base
+
+`packages/core/src/database.types.ts` sale de las migraciones, no de la base en línea: corre todas en PGlite y escribe
+los tipos con lo que la app puede usar con su sesión (el correo de los perfiles y las funciones internas no aparecen, y
+los campos con lista de valores, como `kind` o `verb`, llevan esos valores). Si cambias una migración:
+
+```bash
+npm run db:types
+```
+
+Así, leer una columna cerrada, llamar una función interna o escribir donde la base no deja es un error al compilar.
 
 ## Documentos
 
@@ -124,18 +138,26 @@ Hay dos suites:
 ## Estructura
 
 ```
-src/
-  app.config.ts      nombre de la app (un solo lugar)
-  lib/domain.ts      reglas de dinero, sin dependencias
-  lib/format.ts      RD$, fechas en español
-  data/              Supabase, demo en memoria, store y cálculos derivados
+packages/core/       lo que comparten la web y la app nativa (sin navegador ni React)
+  src/app.ts         nombre de la app (un solo lugar)
+  src/domain.ts      reglas de dinero, sin dependencias
+  src/derive.ts      saldos, deudas y textos que salen de los datos
+  src/format.ts      RD$, fechas en español
+  src/store.ts       la foto de los datos y las acciones (cada app la conecta con sus hooks)
+  src/supabase.ts    sesión, lectura y escritura en Supabase (configurable: la web y la nativa pasan lo suyo)
+  src/demo.ts        datos de demostración en memoria
+  src/database.types.ts  tipos de la base, generados desde las migraciones
+src/                 la web (PWA)
+  data/connect.ts    conecta el núcleo con las variables de Vite
+  data/store.ts      hooks de React sobre el almacén del núcleo
   ui/nav.tsx         pestañas, pila de pantallas, gesto de volver, hojas, toasts, botón atrás de Android
   ui/kit.tsx         dinero, avatares, filas, el renglón del "por qué"
   screens/           Inicio, Grupos, Actividad, Cuenta, grupo, persona, gasto
   sheets/            nuevo gasto, saldar, pagar, grupos e invitaciones
 supabase/
   migrations/        esquema, RLS y funciones (save_expense valida que todo cuadre)
-  tests/             la migración probada en PGlite
+  tests/             la migración probada en PGlite y el generador de tipos
+.github/workflows/   pruebas automáticas en cada subida
 ```
 
 ## Lo que viene

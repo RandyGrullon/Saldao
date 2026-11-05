@@ -1,9 +1,5 @@
 import { useState } from 'react';
-import { APP } from '../app.config';
-import { PRIVACY_URL, TERMS_URL } from '../lib/legal';
-import { moneyT } from '../lib/format';
-import { myTotals } from '../data/derive';
-import { getBackend, run } from '../data/store';
+import { APP, getBackend, moneyT, myTotals, PRIVACY_URL, run, TERMS_URL } from '@saldao/core';
 import { Icon } from '../ui/icons';
 import { errMsg, useS } from '../ui/kit';
 import { SheetHead, useNav } from '../ui/nav';

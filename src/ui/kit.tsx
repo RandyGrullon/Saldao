@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { cat } from '../lib/categories';
-import { involves, ledger, pairVal, type Expense, type Id, type LedgerItem } from '../lib/domain';
-import { curSym, dayNum, fdate, monShort, moneyT, parts } from '../lib/format';
-import { fullName, groupOf, hueOf, initials, listOf, mineOf, short } from '../data/derive';
-import { run, useSnap } from '../data/store';
-import type { Backend, Snapshot } from '../data/types';
+import { canEdit, cat, curSym, dayNum, fdate, fullName, groupOf, hueOf, initials, involves, mineOf, moneyT, monShort, myStatus, paidText, parts, run, short, type Backend, type Expense, type Id, type LedgerItem, type Snapshot } from '@saldao/core';
+import { useSnap } from '../data/store';
 import { Icon, type IconName } from './icons';
 import { buzz, useNav } from './nav';
 
@@ -102,11 +98,6 @@ export function payText(s: Snapshot, e: Expense) {
   if (to === s.me) return <><b>{short(s, from)}</b> te pagó</>;
   return <><b>{short(s, from)}</b> le pagó a <b>{short(s, to)}</b></>;
 }
-export function paidText(s: Snapshot, e: Expense) {
-  const ps = Object.keys(e.payers);
-  if (ps.length > 1) return `Pagaron ${ps.map(k => (k === s.me ? 'tú' : short(s, k))).join(' y ')}`;
-  return ps[0] === s.me ? `Pagaste ${moneyT(e.amount, e.currency)}` : `${short(s, ps[0])} pagó ${moneyT(e.amount, e.currency)}`;
-}
 /** Cuánto mueve este gasto tu saldo. */
 export function Impact({ e }: { e: Expense }) {
   const s = useS(), m = mineOf(s, e);
@@ -116,9 +107,6 @@ export function Impact({ e }: { e: Expense }) {
   if (m < 0) return <span className="end neg"><span className="lbl">te prestaron</span><Money c={-m} /></span>;
   return <span className="end zero"><span className="lbl">{involves(e, s.me) ? 'pagaste lo tuyo' : 'no participas'}</span></span>;
 }
-
-export const canEdit = (s: Snapshot, e: Expense) =>
-  e.createdBy === s.me || involves(e, s.me) || groupOf(s, e.groupId)?.roles[s.me] === 'admin';
 
 /** ¿Ya se saldó este movimiento? */
 export function ItemStatus({ it }: { it: LedgerItem }) {
@@ -176,14 +164,6 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
       </button>
     </li>
   );
-}
-/** En la lista: si tu parte de este gasto ya se saldó con cada persona. */
-function myStatus(s: Snapshot, e: Expense) {
-  if (e.isPayment) return null;
-  const ks = [...new Set([...Object.keys(e.payers), ...Object.keys(e.shares)])].filter(k => k !== s.me && pairVal(e, s.me, k));
-  if (!ks.length) return null;
-  const done = ks.filter(k => !ledger(s.me, k, listOf(s, e.groupId)).find(it => it.e.id === e.id)?.left).length;
-  return done ? { done, total: ks.length } : null;
 }
 
 export { fullName, short };

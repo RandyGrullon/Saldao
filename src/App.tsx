@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { APP } from './app.config';
-import { start, stop, useBusy, useSnap } from './data/store';
-import { isConfigured, sb, supabaseBackend } from './data/supabase';
+import { APP, start, stop } from '@saldao/core';
+import { sb, supabaseBackend } from '@saldao/core/supabase';
+import { isConfigured } from './data/connect';
+import { useBusy, useSnap } from './data/store';
 import { pendingInvite } from './lib/invite';
 import { AuthScreen, NewPasswordScreen } from './screens/auth';
 import { LegalGate } from './screens/legal';
@@ -31,7 +32,7 @@ export function App() {
   // al volver del enlace de "olvidé mi contraseña" se pide la nueva antes de entrar
   const [recovery, setRecovery] = useState(() => location.hash.includes('type=recovery'));
   useEffect(() => {
-    if (DEMO) { import('./data/demo').then(m => start(m.demoBackend)).then(() => setPhase('ready')); return; }
+    if (DEMO) { import('@saldao/core/demo').then(m => start(m.createDemoBackend(() => location.reload()))).then(() => setPhase('ready')); return; }
     if (!isConfigured()) { setPhase('setup'); return; }
     const boot = async (uid: string | null) => {
       if (uid === user.current) return;

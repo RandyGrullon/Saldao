@@ -1,17 +1,12 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { APP } from '../app.config';
-import { USERNAME, USERNAME_RULE, fdate, ago, moneyT, plural, typedUser } from '../lib/format';
-import { friendBal, friends, groupBal, groupOf, hueOf, myTotals, pendingInfo, short, visibleGroups } from '../data/derive';
-import { run } from '../data/store';
-import type { Activity, Group, Snapshot } from '../data/types';
+import { ago, APP, canEdit, fdate, friendBal, friends, groupBal, groupOf, hueOf, moneyT, myTotals, pendingInfo, plural, PRIVACY_URL, run, short, TERMS_URL, typedUser, USERNAME, USERNAME_RULE, visibleGroups, type Activity, type Group, type Snapshot } from '@saldao/core';
 import { Icon, type IconName } from '../ui/icons';
-import { AnimMoney, Av, BalText, Empty, RowIc, Impact, Money, canEdit, errMsg, payText, useAct, useS } from '../ui/kit';
+import { AnimMoney, Av, BalText, Empty, RowIc, Impact, Money, errMsg, payText, useAct, useS } from '../ui/kit';
 import { buzz, useNav } from '../ui/nav';
 import { MySettleSheet } from '../sheets/settle';
 import { NewGroupSheet } from '../sheets/groups';
 import { AddExpenseSheet } from '../sheets/AddExpense';
 import { loadTheme, saveTheme, type ThemeMode } from '../lib/theme';
-import { PRIVACY_URL, TERMS_URL } from '../lib/legal';
 import { DeleteAccountSheet } from './legal';
 
 const KIND: Record<string, string> = { casa: 'Casa', viaje: 'Viaje', pareja: 'Pareja', otro: 'Grupo', directo: 'Entre dos' };
