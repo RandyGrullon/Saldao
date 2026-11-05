@@ -11,6 +11,8 @@ import { MySettleSheet } from '../sheets/settle';
 import { NewGroupSheet } from '../sheets/groups';
 import { AddExpenseSheet } from '../sheets/AddExpense';
 import { loadTheme, saveTheme, type ThemeMode } from '../lib/theme';
+import { PRIVACY_URL, TERMS_URL } from '../lib/legal';
+import { DeleteAccountSheet } from './legal';
 
 const KIND: Record<string, string> = { casa: 'Casa', viaje: 'Viaje', pareja: 'Pareja', otro: 'Grupo', directo: 'Entre dos' };
 const KIND_IC: Record<string, IconName> = { casa: 'home', viaje: 'compass', pareja: 'heart', otro: 'users', directo: 'swap' };
@@ -222,7 +224,12 @@ export function Account({ demo }: { demo: boolean }) {
         <div><dt>Moneda principal</dt><dd>Peso dominicano (RD$)</dd></div>
         <div><dt>Idioma</dt><dd>Español</dd></div>
       </dl>
+      <ul className="list card">
+        <li><a className="row tap" href={TERMS_URL} target="_blank" rel="noopener"><RowIc n="receipt" /><span className="main"><span className="t">Términos de uso</span></span><Icon n="chevR" className="faint" /></a></li>
+        <li><a className="row tap" href={PRIVACY_URL} target="_blank" rel="noopener"><RowIc n="eye" /><span className="main"><span className="t">Política de privacidad</span></span><Icon n="chevR" className="faint" /></a></li>
+      </ul>
       <button className="btn danger block tap" onClick={() => run(b => b.signOut()).catch(() => location.reload())}><Icon n="out" sm />{demo ? 'Reiniciar demostración' : 'Cerrar sesión'}</button>
+      <button className="link danger-link tap" onClick={() => nav.openSheet(<DeleteAccountSheet />, 'Borrar mi cuenta', true)}>Borrar mi cuenta</button>
       {demo && <p className="foot">Modo demostración: personas, montos y cuentas son de ejemplo y nada se guarda.</p>}
     </div>
   );

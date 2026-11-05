@@ -4,6 +4,7 @@ import { start, stop, useBusy, useSnap } from './data/store';
 import { isConfigured, sb, supabaseBackend } from './data/supabase';
 import { pendingInvite } from './lib/invite';
 import { AuthScreen, NewPasswordScreen } from './screens/auth';
+import { LegalGate } from './screens/legal';
 import { ExpenseScreen, GroupScreen, PersonScreen } from './screens/detail';
 import { Account, ActivityTab, Groups, Home, useUnread } from './screens/tabs';
 import { JoinSheet } from './sheets/groups';
@@ -69,6 +70,8 @@ function Ready() {
   const unread = useUnread(s);
   const [token] = useState(pendingInvite);
   if (!s) return null;
+  // Con Google, una cuenta de antes de los términos o una versión nueva: primero aceptar.
+  if (!s.legalOk) return <LegalGate />;
   return (
     <NavShell
       renderTab={t => t === 'home' ? <Home /> : t === 'groups' ? <Groups /> : t === 'activity' ? <ActivityTab unread={unread} /> : <Account demo={DEMO} />}

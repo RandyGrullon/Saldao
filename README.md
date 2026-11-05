@@ -83,6 +83,14 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
   - gastos, grupos, personas sin cuenta, comentarios y enlaces de invitación: por persona;
   - además, un usuario se bloquea tras 5 contraseñas malas.
 - **Datos limpios:** sin caracteres de control en nombres y textos, JSON con tamaño tope y fechas razonables.
+- **Términos y privacidad** en [/terminos.html](public/terminos.html) y [/privacidad.html](public/privacidad.html), con fecha de versión:
+  - al crear la cuenta se aceptan con una casilla, y se guarda qué versión, cuándo y desde qué navegador;
+  - con Google, con una cuenta vieja o cuando cambia la versión, la app los pide al entrar.
+- **Borrar la cuenta** en Cuenta, escribiendo BORRAR:
+  - se va el acceso, el correo, el usuario y dónde te pagan;
+  - los gastos compartidos se quedan con el nombre, para las demás personas;
+  - un grupo sin nadie más con cuenta se borra completo.
+- **El correo** de cada perfil solo lo ve su dueño.
 - **En el navegador:**
   - política de contenido (CSP) y cabeceras de seguridad en `vercel.json`;
   - los errores de la base se muestran en español y sin detalles internos;

@@ -68,7 +68,8 @@ export function PersonScreen({ id }: { id: Id }) {
     <>
       <Bar />
       <div className="scroll pad">
-        <header className="head"><Av id={id} size="lg" /><h1>{p.name}</h1>{!p.userId && <p className="meta">Todavía no tiene cuenta: mándale el enlace del grupo.</p>}</header>
+        <header className="head"><Av id={id} size="lg" /><h1>{p.name}</h1>{p.deletedAt ? <p className="meta">Borró su cuenta. Lo que compartieron sigue aquí.</p>
+          : !p.userId && <p className="meta">Todavía no tiene cuenta: mándale el enlace del grupo.</p>}</header>
         <section className="card hero">
           <p className="lbl">{b > 0 ? `${short(s, id)} te debe` : b < 0 ? `Le debes a ${short(s, id)}` : 'Están a mano'}</p>
           <p className={`big${b > 0 ? ' pos' : b < 0 ? ' neg' : ''}`}><AnimMoney c={Math.abs(b)} sign={b > 0} /></p>

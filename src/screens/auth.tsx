@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { APP } from '../app.config';
-import { UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp, usernameAvailable } from '../data/supabase';
+import { DELETED, UNCONFIRMED, resendConfirmation, sendPasswordReset, setNewPassword, signIn, signInWithGoogle, signUp, usernameAvailable } from '../data/supabase';
 import { USERNAME, USERNAME_RULE, typedUser } from '../lib/format';
 import { Icon } from '../ui/icons';
 import { errMsg } from '../ui/kit';
+import { LegalLinks } from './legal';
 
 const MIN = 8;
 
@@ -19,6 +20,12 @@ const LINK_ERR = (() => {
     ? 'Ese enlace ya venció o ya se usó. Si ya confirmaste tu correo, entra normal. Si no, escribe tu correo y pide otro.'
     : 'No pudimos abrir ese enlace. Entra con tu correo y contraseña o pide otro correo.';
 })();
+
+// Después de borrar la cuenta, la pantalla de entrar lo confirma una vez.
+function justDeleted() {
+  try { if (sessionStorage.getItem(DELETED)) { sessionStorage.removeItem(DELETED); return 'Tu cuenta se borró. Gracias por usar Saldao.'; } } catch { /* sin almacenamiento */ }
+  return '';
+}
 
 function PasswordField({ label, value, onChange, autoComplete }: {
   label: string; value: string; onChange: (v: string) => void; autoComplete: 'current-password' | 'new-password';
@@ -45,7 +52,8 @@ export function AuthScreen() {
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(LINK_ERR);
-  const [info, setInfo] = useState('');
+  const [info, setInfo] = useState(justDeleted);
+  const [agree, setAgree] = useState(false);
   const [resend, setResend] = useState(!!LINK_ERR);
   const [resendTo, setResendTo] = useState(''); // el correo de la cuenta, aunque haya entrado con su usuario
   const [free, setFree] = useState<boolean | null>(null);
@@ -53,7 +61,7 @@ export function AuthScreen() {
   const em = email.trim();
   const userOk = USERNAME.test(username);
   const valid = mode === 'login' ? em.length > 0 && pass.length > 0
-    : em.includes('@') && (mode === 'reset' || (pass.length >= MIN && name.trim().length > 0 && userOk && free !== false));
+    : em.includes('@') && (mode === 'reset' || (pass.length >= MIN && name.trim().length > 0 && userOk && free !== false && agree));
   const to = resendTo || em;
 
   // ¿está libre el usuario? Se pregunta cuando deja de escribir.
@@ -117,6 +125,8 @@ export function AuthScreen() {
             value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'login' ? 'tu@correo.com o tu usuario' : 'tu@correo.com'} /></label>
         {mode !== 'reset' && <PasswordField label={mode === 'register' ? `Contraseña (mínimo ${MIN} caracteres)` : 'Contraseña'}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={pass} onChange={setPass} />}
+        {mode === 'register' && <label className="agree"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
+          <span>Acepto los <LegalLinks />.</span></label>}
         <button className="btn primary block tap" disabled={busy || !valid}>
           {busy ? 'Un momento…' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Crear cuenta' : 'Enviarme el enlace'}</button>
       </form>

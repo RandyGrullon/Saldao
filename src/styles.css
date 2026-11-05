@@ -352,6 +352,20 @@ textarea.field { padding: 12px 14px; min-height: 84px; resize: none; }
 .plain-card .t { font-weight: 600; }
 .plain-card .s { font-size: 15px; color: var(--muted); }
 .plain-card .btn { justify-self: start; }
+.plain-card .legal-sum { padding: 0; }
+
+/* términos, privacidad y borrar la cuenta */
+a.row { color: inherit; text-decoration: none; }
+.row .faint { color: var(--faint); }
+.legal-sum { display: grid; gap: 14px; padding: 20px 22px; }
+.legal-sum li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--fg-2); }
+.legal-sum .ic { margin-top: 1px; color: var(--accent-ink); }
+.gate .note a, .agree a { color: var(--accent-ink); font-weight: 600; }
+.agree { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 10px; font-size: 14px !important; font-weight: 500 !important; color: var(--fg-2) !important; }
+.agree input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); }
+.form-label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.btn.danger-solid { background: var(--danger); color: var(--on-danger); }
+.danger-link { justify-self: center; align-self: center; color: var(--danger); font-weight: 600; }
 
 /* detalle */
 .shares { display: grid; }

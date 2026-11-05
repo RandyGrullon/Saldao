@@ -60,7 +60,7 @@ describe('migración', () => {
 
   it('los de afuera no ven el grupo ni sus perfiles', async () => {
     expect(await as(U.cris, () => all('select * from groups'))).toHaveLength(0);
-    expect(await as(U.cris, () => all('select * from profiles where id = $1', [ana]))).toHaveLength(0);
+    expect(await as(U.cris, () => all('select id, name from profiles where id = $1', [ana]))).toHaveLength(0);
   });
 
   it('un gasto que no cuadra se rechaza', async () => {
@@ -226,9 +226,9 @@ describe('seguridad', () => {
 
   it('con sesión, solo las funciones de la app y las que usan las reglas', async () => {
     expect(await runnable('authenticated')).toEqual([
-      'add_member', 'add_placeholder', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_expense',
-      'direct_group', 'invite_preview', 'is_admin', 'is_member', 'join_group', 'login_email', 'regenerate_invite', 'restore_expense',
-      'save_expense', 'shares_group', 'username_available'].sort());
+      'accept_legal', 'add_member', 'add_placeholder', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_account',
+      'delete_expense', 'direct_group', 'invite_preview', 'is_admin', 'is_member', 'join_group', 'login_email', 'regenerate_invite',
+      'restore_expense', 'save_expense', 'shares_group', 'username_available'].sort());
   });
 
   it('nadie escribe directo, salvo comentar y editar su perfil', async () => {
@@ -283,5 +283,67 @@ describe('seguridad', () => {
     const comment = (n: number) => as(U.cris, () => db.query('insert into comments (expense_id, profile_id, body) values ($1, $2, $3)', [e, cris, `hola ${n}`]));
     for (let i = 0; i < 60; i++) await comment(i);
     await expect(comment(60)).rejects.toThrow(/muy rápido/);
+  });
+
+  it('el correo de un perfil no lo ven los demás del grupo', async () => {
+    await expect(as(U.beto, () => all('select email from profiles'))).rejects.toThrow(/permission denied/);
+    expect(await as(U.beto, () => all('select name from profiles where user_id = $1', [U.ana]))).toHaveLength(1);
+  });
+});
+
+describe('términos, privacidad y borrar la cuenta', () => {
+  const U2 = { eva: '00000000-0000-0000-0000-0000000000e1', fede: '00000000-0000-0000-0000-0000000000f1' };
+  const version = async () => (await one<{ v: string }>('select private.legal_version() as v')).v;
+
+  it('la versión es la misma en la base, la app y las dos páginas', async () => {
+    const v = await version();
+    const app = readFileSync(new URL('../../src/lib/legal.ts', import.meta.url), 'utf8');
+    expect(app).toContain(`LEGAL_VERSION = '${v}'`);
+    for (const page of ['terminos', 'privacidad'])
+      expect(readFileSync(new URL(`../../public/${page}.html`, import.meta.url), 'utf8')).toContain(`Versión ${v}`);
+  });
+
+  it('registrarse con correo guarda la aceptación; con Google la pide la app', async () => {
+    const v = await version();
+    await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'eva@ejemplo.do', $2), ($3, 'fede@ejemplo.do', '{"full_name":"Fede"}')`,
+      [U2.eva, JSON.stringify({ full_name: 'Eva', legal: v }), U2.fede]);
+    expect(await as(U2.eva, () => all('select version from legal_acceptances'))).toEqual([{ version: v }]);
+    expect(await as(U2.fede, () => all('select version from legal_acceptances'))).toEqual([]);
+    await expect(as(U2.fede, () => one(`select accept_legal('2020-01-01')`))).rejects.toThrow(/más nueva/);
+    await as(U2.fede, () => one('select accept_legal($1)', [v]));
+    expect(await as(U2.fede, () => all('select version from legal_acceptances'))).toEqual([{ version: v }]);
+    // cada quien ve solo lo suyo
+    expect(await as(U2.eva, () => all('select user_id from legal_acceptances'))).toEqual([{ user_id: U2.eva }]);
+  });
+
+  it('borrar la cuenta: se va lo personal, el nombre se queda en lo compartido y lo que era solo suyo se borra', async () => {
+    const compartido = await as(U.ana, async () => (await one<{ g: string }>(`select create_group('Con Eva', 'otro') as g`)).g);
+    const token = (await one('select invite_token from groups where id = $1', [compartido])).invite_token;
+    await as(U2.eva, () => one('select join_group($1)', [token]));
+    const solo = await as(U2.eva, async () => (await one<{ g: string }>(`select create_group('Solo Eva', 'otro') as g`)).g);
+    const marcador = await as(U2.eva, async () => (await one<{ p: string }>(`select add_placeholder($1, 'Primo de Eva') as p`, [solo])).p);
+    const eva = await pid(U2.eva), ana = await pid(U.ana);
+    await as(U2.eva, () => db.query(`update profiles set username = 'eva.r', payout = 'Banco · 123' where id = $1`, [eva]));
+    await as(U2.eva, () => one('select save_expense($1)',
+      [JSON.stringify({ group_id: compartido, description: 'Cena', amount: 2000, payers: { [eva]: 2000 }, shares: { [eva]: 1000, [ana]: 1000 } })]));
+
+    await expect(as(U2.eva, () => one(`select delete_account('borrar')`))).rejects.toThrow(/Escribe BORRAR/);
+    await as(U2.eva, () => one(`select delete_account('BORRAR')`));
+
+    expect(await one('select count(*)::int as n from auth.users where id = $1', [U2.eva])).toEqual({ n: 0 });
+    expect(await one('select count(*)::int as n from legal_acceptances where user_id = $1', [U2.eva])).toEqual({ n: 0 });
+    const p = await one('select name, user_id, email, username, payout, deleted_at from profiles where id = $1', [eva]);
+    expect(p).toMatchObject({ name: 'Eva', user_id: null, email: null, username: null, payout: null });
+    expect(p.deleted_at).not.toBeNull();
+    // lo compartido sigue para Ana; lo que era solo de Eva (y quien ella agregó ahí) ya no existe
+    expect(await as(U.ana, () => all('select s.amount from expense_shares s join expenses e on e.id = s.expense_id where e.group_id = $1', [compartido]))).toHaveLength(2);
+    expect(await one('select count(*)::int as n from groups where id = $1', [solo])).toEqual({ n: 0 });
+    expect(await one('select count(*)::int as n from profiles where id = $1', [marcador])).toEqual({ n: 0 });
+    // y nadie puede reclamar su lugar con el enlace
+    const prev = await as(U.beto, () => one('select invite_preview($1) as p', [token]));
+    expect(prev.p.placeholders).toEqual([]);
+    await expect(as(U.beto, () => one('select join_group($1, $2)', [token, eva]))).rejects.toThrow(/ya lo reclamó/);
+    // sin cuenta, ya no puede hacer nada
+    await expect(as(U2.eva, () => one(`select create_group('Otra', 'otro')`))).rejects.toThrow(/iniciar sesión/);
   });
 });

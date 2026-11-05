@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Expense, Id } from '../lib/domain';
 import { typedUser } from '../lib/format';
+import { LEGAL_VERSION } from '../lib/legal';
 import type { Activity, Backend, ExpenseInput, Group, InvitePreview, Snapshot } from './types';
 
 let client: SupabaseClient | null = null;
@@ -12,6 +13,8 @@ export function sb(): SupabaseClient {
 export const isConfigured = () => !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 // ── sesión: correo y contraseña ──────────────────────────────
+/** Marca para que la pantalla de entrar diga que la cuenta se borró. */
+export const DELETED = 'saldao:cuenta-borrada';
 export const UNCONFIRMED = 'Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam).';
 const TAKEN = 'Ese usuario ya lo tiene otra persona. Elige otro.';
 // Supabase responde en inglés; estos son los mensajes que una persona puede ver al entrar o registrarse.
@@ -52,7 +55,7 @@ export async function usernameAvailable(username: string): Promise<boolean> {
 /** Devuelve si hace falta confirmar el correo antes de entrar (depende de "Confirm email" en Supabase). */
 export async function signUp(name: string, username: string, email: string, password: string) {
   if (!(await usernameAvailable(username))) throw new Error(TAKEN);
-  const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name, username }, emailRedirectTo: location.origin } });
+  const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name, username, legal: LEGAL_VERSION }, emailRedirectTo: location.origin } });
   if (error) throw authError(error);
   // con "Confirm email" activo, un correo ya registrado no da error: vuelve un usuario sin identidades
   if (data.user && !data.user.identities?.length) throw authError({ message: 'already registered' });
@@ -132,22 +135,26 @@ export const supabaseBackend: Backend = {
     const { data: { user } } = await sb().auth.getUser();
     if (!user) throw new Error('Sesión vencida');
     const c = sb();
-    const [profiles, groups, expenses, comments, activity] = await Promise.all([
-      ok<Row[]>(c.from('profiles').select('id, user_id, name, email, payout, username')),
+    const [profiles, groups, expenses, comments, activity, legal] = await Promise.all([
+      // el correo no se pide: los demás no lo ven; el tuyo viene de la sesión
+      ok<Row[]>(c.from('profiles').select('id, user_id, name, payout, username, deleted_at')),
       ok<Row[]>(c.from('groups').select('id, name, kind, currency, invite_token, created_at, group_members(profile_id, role)').is('archived_at', null)),
       ok<Row[]>(c.from('expenses').select('*, expense_payers(profile_id, amount), expense_shares(profile_id, amount)').order('date', { ascending: false }).limit(3000)),
       ok<Row[]>(c.from('comments').select('id, expense_id, profile_id, body, created_at').is('deleted_at', null).order('created_at')),
       ok<Row[]>(c.from('activity').select('*').order('id', { ascending: false }).limit(300)),
+      ok<Row[]>(c.from('legal_acceptances').select('version').eq('version', LEGAL_VERSION)),
     ]);
     me = profiles.find(p => p.user_id === user.id)?.id ?? null;
     if (!me) throw new Error('No encontramos tu perfil');
     return {
       me,
-      profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.email, payout: p.payout, username: p.username }])),
+      profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.user_id === user.id ? user.email ?? null : null,
+        payout: p.payout, username: p.username, deletedAt: p.deleted_at }])),
       groups: groups.map(toGroup),
       expenses: expenses.map(toExpense),
       comments: comments.map(r => ({ id: r.id, expenseId: r.expense_id, profileId: r.profile_id, body: r.body, createdAt: r.created_at })),
       activity: activity.map((r): Activity => ({ id: String(r.id), groupId: r.group_id, actor: r.actor, verb: r.verb, expenseId: r.expense_id, payload: r.payload ?? {}, createdAt: r.created_at })),
+      legalOk: legal.length > 0,
     };
   },
   subscribe(onChange) {
@@ -172,6 +179,13 @@ export const supabaseBackend: Backend = {
     const { error } = await sb().from('profiles').update({ name: p.name, payout: p.payout || null, username: p.username || null }).eq('id', me!);
     if (error?.code === '23505') throw new Error(TAKEN);
     if (error) throw dbError(error);
+  },
+  acceptLegal: async () => { await rpc('accept_legal', { p_version: LEGAL_VERSION }); },
+  async deleteAccount(confirm) {
+    await rpc('delete_account', { p_confirm: confirm });
+    try { sessionStorage.setItem(DELETED, '1'); } catch { /* sin almacenamiento: no sale el aviso */ }
+    // la cuenta ya no existe: la sesión se cierra en este teléfono (el servidor ya no la reconoce)
+    await sb().auth.signOut({ scope: 'local' });
   },
   async signOut() { await sb().auth.signOut(); },
 };

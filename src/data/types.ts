@@ -1,7 +1,7 @@
 import type { Cents, Expense, Id, Item, SplitMode } from '../lib/domain';
 
 export type GroupKind = 'casa' | 'viaje' | 'pareja' | 'otro' | 'directo';
-export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null }
+export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null; deletedAt: string | null }
 export interface Group {
   id: Id; name: string; kind: GroupKind; currency: string; inviteToken: string; createdAt: string;
   members: Id[]; roles: Record<Id, 'admin' | 'miembro'>;
@@ -18,6 +18,7 @@ export interface Snapshot {
   expenses: Expense[];      // incluye borrados (para restaurarlos desde Actividad)
   comments: Comment[];
   activity: Activity[];
+  legalOk: boolean;         // aceptó la versión vigente de los términos y la privacidad
 }
 
 export interface ExpenseInput {
@@ -43,5 +44,8 @@ export interface Backend {
   invitePreview(token: string): Promise<InvitePreview | null>;
   joinGroup(token: string, as: Id | null): Promise<Id>;
   updateProfile(p: { name: string; payout: string; username: string }): Promise<void>;
+  acceptLegal(): Promise<void>;
+  /** Borra la cuenta (hay que escribir BORRAR) y cierra la sesión. */
+  deleteAccount(confirm: string): Promise<void>;
   signOut(): Promise<void>;
 }

@@ -30,6 +30,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
+        // los términos y la privacidad son páginas propias, no la app
+        navigateFallbackDenylist: [/^\/(terminos|privacidad)\.html$/],
         runtimeCaching: [{
           urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
           handler: 'CacheFirst',

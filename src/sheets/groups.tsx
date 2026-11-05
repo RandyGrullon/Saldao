@@ -17,6 +17,7 @@ export function NewGroupSheet() {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<GroupKind>('viaje');
   const [picked, setPicked] = useState<Id[]>([]);
+  const known = friends(s).filter(p => !s.profiles[p].deletedAt);
   const [newPeople, setNewPeople] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,9 +44,9 @@ export function NewGroupSheet() {
         <div className="seg" role="radiogroup" aria-label="Tipo de grupo">
           {KINDS.map(([k, l]) => <button key={k} className="tap" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}>{l}</button>)}
         </div>
-        {friends(s).length > 0 && <>
+        {known.length > 0 && <>
           <h3>Personas de tus otros grupos</h3>
-          <div className="chips">{friends(s).map(p => (
+          <div className="chips">{known.map(p => (
             <button key={p} className="chip person tap" role="checkbox" aria-checked={picked.includes(p)}
               onClick={() => { buzz(); setPicked(x => (x.includes(p) ? x.filter(y => y !== p) : [...x, p])); }}><Av id={p} size="xs" />{short(s, p)}</button>))}</div>
         </>}
@@ -67,7 +68,7 @@ export function InviteSheet({ groupId }: { groupId: Id }) {
   const [draft, setDraft] = useState('');
   if (!g) return null;
   const link = inviteLink(g.inviteToken);
-  const others = friends(s).filter(p => !g.members.includes(p));
+  const others = friends(s).filter(p => !g.members.includes(p) && !s.profiles[p].deletedAt);
   const share = async () => {
     const text = `Únete a «${g.name}» en Saldao para llevar las cuentas claras:`;
     if (navigator.share) { try { await navigator.share({ title: g.name, text, url: link }); } catch { /* cancelado */ } return; }
