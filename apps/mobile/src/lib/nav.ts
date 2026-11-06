@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import type { Id } from '@saldao/core';
+import { tr, trError } from '@saldao/core';
 
 const q = (o: Record<string, string | number | undefined>) => {
   const s = Object.entries(o).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
@@ -35,5 +36,5 @@ export const buzz = () => { if (Platform.OS !== 'web') Haptics.selectionAsync().
 
 export const errMsg = (e: unknown) => {
   const m = (e as { message?: string })?.message;
-  return m && !/fetch|network/i.test(m) ? m : 'No se pudo completar. Revisa tu conexión e intenta de nuevo.';
+  return m && !/fetch|network/i.test(m) ? trError(m) : tr("No se pudo completar. Revisa tu conexión e intenta de nuevo.");
 };

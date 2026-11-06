@@ -4,6 +4,7 @@ import { Path, Rect, Svg } from 'react-native-svg';
 import { getBackend, qrPath, type Group } from '@saldao/core';
 import { useC } from '../lib/theme';
 import { Icon, type IconName } from './icons';
+import { tr } from '@saldao/core';
 
 export const KIND_IC: Record<string, IconName> = { casa: 'home', viaje: 'compass', pareja: 'heart', otro: 'users', directo: 'swap' };
 
@@ -34,7 +35,7 @@ export function GroupPhoto({ g, size = 40 }: { g: Group; size?: number }) {
 export function Qr({ text, size = 260 }: { text: string; size?: number }) {
   const q = qrPath(text);
   return (
-    <View style={{ alignSelf: 'center', padding: 14, borderRadius: 22, backgroundColor: '#fff' }} accessibilityRole="image" accessibilityLabel="Código QR con tus datos de cobro">
+    <View style={{ alignSelf: 'center', padding: 14, borderRadius: 22, backgroundColor: '#fff' }} accessibilityRole="image" accessibilityLabel={tr("Código QR con tus datos de cobro")}>
       <Svg width={size} height={size} viewBox={`-2 -2 ${q.size + 4} ${q.size + 4}`}>
         <Rect x={-2} y={-2} width={q.size + 4} height={q.size + 4} fill="#fff" />
         <Path d={q.d} fill="#0e0f13" />

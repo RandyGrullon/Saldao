@@ -1,3 +1,4 @@
+import { tr } from '@saldao/core';
 // Bloqueo con Face ID, huella o Windows Hello (WebAuthn con el lector del propio aparato). Es un candado para quien
 // agarre el teléfono desbloqueado: la sesión y los datos siguen protegidos por la cuenta.
 const KEY = 'saldao:bloqueo';
@@ -12,11 +13,11 @@ export const lockOn = () => { try { return !!localStorage.getItem(KEY); } catch 
 
 export async function enableLock(name: string) {
   const cred = await navigator.credentials.create({ publicKey: {
-    challenge: rand(32), rp: { name: 'Saldao' }, user: { id: rand(16), name, displayName: name },
+    challenge: rand(32), rp: { name: tr("Saldao") }, user: { id: rand(16), name, displayName: name },
     pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
     authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' }, timeout: 60000,
   } }) as PublicKeyCredential | null;
-  if (!cred) throw new Error('No se pudo activar el bloqueo');
+  if (!cred) throw new Error(tr("No se pudo activar el bloqueo"));
   localStorage.setItem(KEY, toB64(cred.rawId));
 }
 export const disableLock = () => { try { localStorage.removeItem(KEY); } catch { /* sin almacenamiento */ } };

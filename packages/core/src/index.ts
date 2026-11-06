@@ -7,6 +7,7 @@ export * from './domain';
 export * from './features';
 export * from './errors';
 export * from './format';
+export * from './i18n';
 export * from './invite';
 export * from './legal';
 export { newId } from './queue';

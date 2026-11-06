@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
+import { tr } from '@saldao/core';
 
 const KEY = 'saldao:bloqueo';
 
@@ -12,11 +13,11 @@ export async function lockSupported(): Promise<boolean> {
 export const lockOn = async () => (await AsyncStorage.getItem(KEY).catch(() => null)) === '1';
 
 export async function unlock(): Promise<boolean> {
-  const r = await LocalAuthentication.authenticateAsync({ promptMessage: 'Desbloquea Saldao', cancelLabel: 'Cancelar', disableDeviceFallback: false });
+  const r = await LocalAuthentication.authenticateAsync({ promptMessage: tr("Desbloquea Saldao"), cancelLabel: tr("Cancelar"), disableDeviceFallback: false });
   return r.success;
 }
 export async function enableLock() {
-  if (!(await unlock())) throw new Error('No se pudo comprobar. Intenta de nuevo.');
+  if (!(await unlock())) throw new Error(tr("No se pudo comprobar. Intenta de nuevo."));
   await AsyncStorage.setItem(KEY, '1');
 }
 export const disableLock = () => AsyncStorage.removeItem(KEY);

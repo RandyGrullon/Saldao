@@ -1,6 +1,7 @@
 // Fotos en la app nativa: la cámara o la galería, achicada (1600 px de lado, JPEG) para subirla liviana o mandarla a leer.
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { tr } from '@saldao/core';
 
 export interface Photo { uri: string; base64: string; data: ArrayBuffer }
 
@@ -9,7 +10,7 @@ const toBuffer = (b64: string) => Uint8Array.from(atob(b64), c => c.charCodeAt(0
 /** Abre la cámara (o la galería). Si la persona cancela o no da permiso: null. */
 export async function pickPhoto(camera = true, max = 1600): Promise<Photo | null> {
   const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) throw new Error(camera ? 'Saldao necesita la cámara para la foto. Actívala en los ajustes del teléfono.' : 'Saldao necesita ver tus fotos. Actívalo en los ajustes del teléfono.');
+  if (!perm.granted) throw new Error(camera ? tr("Saldao necesita la cámara para la foto. Actívala en los ajustes del teléfono.") : tr("Saldao necesita ver tus fotos. Actívalo en los ajustes del teléfono."));
   const res = camera
     ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
     : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });

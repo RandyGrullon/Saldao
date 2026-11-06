@@ -19,19 +19,26 @@ Cada una va en las dos apps sobre el mismo núcleo (`packages/core`). Lo que nec
 | 11 | Resumen del mes | núcleo: gasto por categoría, grupo y persona | — |
 | 12 | Presupuesto por grupo | `budget` en el grupo, barra y aviso | — |
 | 13 | Buscar y filtrar | núcleo: texto, persona, categoría, fecha | — |
-| 14 | Exportar | CSV para Excel (y PDF imprimiendo desde la web) | — |
-| 15 | Administrar el grupo | renombrar, foto, roles, archivar y salir | — |
+| 14 | Exportar | CSV para Excel y PDF (imprimir en la web; compartir en la nativa) | — |
+| 15 | Administrar el grupo | renombrar, foto, fechas (de fecha a fecha), roles, quitar personas, archivar y salir | — |
 | 16 | Dividir por noches | forma de dividir «Noches» (partes con su nombre) | — |
 | 17 | Lista de compras | tabla `group_items`, en tiempo real | — |
 | 18 | Bloqueo con Face ID o huella | web: WebAuthn; nativa: el sistema | — |
 | 19 | Contador en el ícono | web: la insignia de la app instalada; nativa: la del sistema | un widget de verdad pide una compilación propia (no Expo Go) |
-| 20 | Inglés | diccionarios en el núcleo y en cada app | — |
+| 20 | Inglés | `tr()` y el diccionario `en.ts` en el núcleo, para las dos apps; se elige en Cuenta | — |
 
 ## Estado
 
-- [ ] Migración y pruebas de la base
-- [ ] Núcleo
-- [ ] Web
-- [ ] App nativa
-- [ ] Funciones de servidor
-- [ ] Inglés
+- [x] Migraciones y pruebas de la base (`20261107000000_mejoras.sql` y `20261107010000_grupos_temporales.sql`)
+- [x] Núcleo
+- [x] Web
+- [x] App nativa
+- [x] Funciones de servidor (`leer-recibo` y `avisar`)
+- [x] Inglés
+
+### Para encenderlo en producción
+
+1. Correr las dos migraciones, en orden, en el SQL Editor.
+2. Poner los secretos de las funciones, publicarlas y crear el webhook de avisos (README › Conectar Supabase, paso 5).
+3. Para avisos en el teléfono: una compilación propia de la app con su proyecto de Expo (Expo Go en Android no recibe
+   avisos).

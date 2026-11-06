@@ -1,5 +1,6 @@
 import { flushSync } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as RPointerEvent } from 'react';
+import { tr } from '@saldao/core';
 
 export type Tab = 'home' | 'groups' | 'activity' | 'account';
 export type Route = { kind: 'group' | 'person' | 'expense' | 'list' | 'summary' | 'search'; id: string };
@@ -193,7 +194,7 @@ function Toast({ t, onDone }: { t: ToastSt; onDone: () => void }) {
   return (
     <div className={`toast${on ? ' on' : ''}`} role="status">
       <span>{t.text}</span>
-      {t.undo && <button className="tap" onClick={() => { t.undo!(); onDone(); }}>Deshacer</button>}
+      {t.undo && <button className="tap" onClick={() => { t.undo!(); onDone(); }}>{tr("Deshacer")}</button>}
     </div>
   );
 }
@@ -203,7 +204,7 @@ export function SheetHead({ title, left, right }: { title: string; left?: ReactN
   const { closeSheet } = useNav();
   return (
     <div className="sheet-head" data-drag>
-      {left ?? <button className="link tap" onClick={closeSheet}>Cancelar</button>}
+      {left ?? <button className="link tap" onClick={closeSheet}>{tr("Cancelar")}</button>}
       <h2>{title}</h2>
       {right ?? <span />}
     </div>

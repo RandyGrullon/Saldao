@@ -2,6 +2,7 @@ import { isRetry } from './errors';
 import { newId, overlay } from './queue';
 import type { Id } from './domain';
 import type { Backend, Op, OpBody, Server, Snapshot } from './types';
+import { tr } from './i18n';
 
 // Una sola fuente de verdad: la foto de los datos. Es lo último que dio la base más los cambios que esperan en la cola,
 // aplicados encima. Así lo que anotas se ve al instante, con o sin señal, y se envía solo cuando hay conexión.
@@ -185,7 +186,7 @@ export function discard(opId: Id) {
 
 // ── lo que usan las pantallas ────────────────────────────────
 interface Ctx { deferred: boolean }
-const nameOf = (id: Id) => snap?.expenses.find(e => e.id === id)?.description ?? 'un gasto';
+const nameOf = (id: Id) => snap?.expenses.find(e => e.id === id)?.description ?? tr("un gasto");
 
 async function enqueue(body: OpBody, label: string, ctx: Ctx) {
   const op = { ...body, id: newId(), at: new Date().toISOString(), label } as Op;
@@ -205,13 +206,13 @@ function actions(ctx: Ctx): Backend {
   return {
     async saveExpense(e) {
       const id = e.id ?? newId();
-      await enqueue({ kind: 'save_expense', input: { ...e, id }, create: !e.id }, e.id ? `Cambios en «${e.description}»` : `«${e.description}»`, ctx);
+      await enqueue({ kind: 'save_expense', input: { ...e, id }, create: !e.id }, e.id ? tr("Cambios en «{0}»", e.description) : `«${e.description}»`, ctx);
       return id;
     },
-    deleteExpense: id => enqueue({ kind: 'delete_expense', expenseId: id }, `Borrar «${nameOf(id)}»`, ctx),
-    restoreExpense: id => enqueue({ kind: 'restore_expense', expenseId: id }, `Restaurar «${nameOf(id)}»`, ctx),
-    confirmPayment: id => enqueue({ kind: 'confirm_payment', expenseId: id }, 'Confirmar un pago', ctx),
-    addComment: (expenseId, body) => enqueue({ kind: 'add_comment', commentId: newId(), expenseId, body }, `Comentario en «${nameOf(expenseId)}»`, ctx),
+    deleteExpense: id => enqueue({ kind: 'delete_expense', expenseId: id }, tr("Borrar «{0}»", nameOf(id)), ctx),
+    restoreExpense: id => enqueue({ kind: 'restore_expense', expenseId: id }, tr("Restaurar «{0}»", nameOf(id)), ctx),
+    confirmPayment: id => enqueue({ kind: 'confirm_payment', expenseId: id }, tr("Confirmar un pago"), ctx),
+    addComment: (expenseId, body) => enqueue({ kind: 'add_comment', commentId: newId(), expenseId, body }, tr("Comentario en «{0}»", nameOf(expenseId)), ctx),
     createGroup: (name, kind) => s.createGroup(name, kind),
     addPlaceholder: (groupId, name) => s.addPlaceholder(groupId, name),
     addMember: (groupId, profileId) => s.addMember(groupId, profileId),
@@ -251,7 +252,7 @@ export function onBusy(f: () => void) { busyListeners.add(f); return () => { bus
 
 /** Ejecuta una acción y trae la foto nueva (si la acción quedó esperando conexión, se ve igual con la cola encima). */
 export async function run<T>(fn: (b: Backend) => Promise<T>): Promise<T> {
-  if (!server) throw new Error('La app no está conectada');
+  if (!server) throw new Error(tr("La app no está conectada"));
   const ctx: Ctx = { deferred: false };
   setBusy(1);
   try {

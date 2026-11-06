@@ -5,6 +5,7 @@ import { OFFLINE, RetryLater } from './errors';
 import { typedUser } from './format';
 import { LEGAL_VERSION } from './legal';
 import type { Activity, ExpenseInput, Group, InvitePreview, ListItem, Op, ScanResult, Server, Snapshot } from './types';
+import { tr } from './i18n';
 
 // ── conexión ─────────────────────────────────────────────────
 // Cada app la configura al arrancar: la web con sus variables de Vite y el origen de la página; la nativa con las suyas,
@@ -26,7 +27,7 @@ export type Client = SupabaseClient<Database>;
 let cfg: SupabaseConfig | null = null;
 let client: Client | null = null;
 export function initSupabase(c: SupabaseConfig) { cfg = c; client = null; }
-const conf = () => { if (!cfg) throw new Error('Falta configurar Supabase'); return cfg; };
+const conf = () => { if (!cfg) throw new Error(tr("Falta configurar Supabase")); return cfg; };
 // Con señal débil una petición puede quedarse colgada: a los 20 s se corta y la cola la reintenta luego.
 const TIMEOUT = 20_000;
 const timedFetch: typeof fetch = (input, init) => {
@@ -44,7 +45,7 @@ export function sb(): Client {
 /** El usuario de la sesión guardada (sin ir a la red, salvo para renovarla). Sin señal para renovarla: reintentar. */
 async function sessionUser() {
   const { data: { session }, error } = await sb().auth.getSession();
-  if (!session) throw error ? new RetryLater(OFFLINE) : new Error('Sesión vencida');
+  if (!session) throw error ? new RetryLater(OFFLINE) : new Error(tr("Sesión vencida"));
   return session.user;
 }
 
@@ -73,7 +74,7 @@ export async function signIn(login: string, password: string) {
   let email = login;
   if (!login.includes('@')) {
     const data = await ok(sb().rpc('login_email', { p_username: typedUser(login), p_password: password }));
-    if (!data) throw new Error('Usuario o contraseña incorrectos.');
+    if (!data) throw new Error(tr("Usuario o contraseña incorrectos."));
     email = data;
   }
   const { error } = await sb().auth.signInWithPassword({ email, password });
@@ -89,7 +90,7 @@ export async function signUp(name: string, username: string, email: string, pass
   const { data, error } = await sb().auth.signUp({ email, password, options: { data: { full_name: name, username, legal: LEGAL_VERSION }, emailRedirectTo: conf().redirectTo } });
   if (error) throw authError(error);
   // con "Confirm email" activo, un correo ya registrado no da error: vuelve un usuario sin identidades
-  if (data.user && !data.user.identities?.length) throw authError({ message: 'already registered' });
+  if (data.user && !data.user.identities?.length) throw authError({ message: tr("already registered") });
   return { needsConfirm: !data.session };
 }
 export async function resendConfirmation(email: string) {
@@ -100,7 +101,7 @@ export async function resendConfirmation(email: string) {
 export async function requireGoogle() {
   const c = conf();
   const settings = await fetch(`${c.url}/auth/v1/settings`, { headers: { apikey: c.anonKey } }).then(r => r.json()).catch(() => null);
-  if (settings && !settings.external?.google) throw new Error('Entrar con Google todavía no está activado. Usa tu correo y contraseña.');
+  if (settings && !settings.external?.google) throw new Error(tr("Entrar con Google todavía no está activado. Usa tu correo y contraseña."));
 }
 /** En la web: la página se va a Google y vuelve con la sesión. (La app nativa abre su propio navegador seguro.) */
 export async function signInWithGoogle() {
@@ -140,7 +141,7 @@ export function dbError(e: DbErr): Error {
   if (e.hint === 'rate_limited') return new RetryLater(m); // el límite de intentos: el mensaje dice cuánto esperar
   if (TRANSIENT.has(e.code)) return new RetryLater(DB_ES[e.code] ?? OFFLINE);
   if (m && !english(m) && ['P0001', '22023', '28000', '42501'].includes(e.code)) return new Error(m);
-  return new Error(DB_ES[e.code ?? ''] ?? 'No se pudo completar. Revisa tu conexión e intenta de nuevo.');
+  return new Error(DB_ES[e.code ?? ''] ?? tr("No se pudo completar. Revisa tu conexión e intenta de nuevo."));
 }
 
 // ── lectura ──────────────────────────────────────────────────
@@ -176,7 +177,7 @@ const toGroup = (r: GroupRow): Group => ({
 });
 
 let me: Id | null = null;
-const mine = () => { if (!me) throw new Error('Sesión vencida'); return me; };
+const mine = () => { if (!me) throw new Error(tr("Sesión vencida")); return me; };
 const toSnake = (e: ExpenseInput & { id: Id }) => ({
   id: e.id, group_id: e.groupId, description: e.description, category: e.category, date: e.date, currency: e.currency,
   amount: e.amount, fx_rate: e.fxRate, split_mode: e.splitMode, split_params: e.splitParams, items: e.items, tax: e.tax, tip: e.tip,
@@ -211,7 +212,7 @@ export const supabaseBackend: Server = {
       ok(c.from('group_items').select('*').order('created_at')),
     ]);
     me = profiles.find(p => p.user_id === user.id)?.id ?? null;
-    if (!me) throw new Error('No encontramos tu perfil');
+    if (!me) throw new Error(tr("No encontramos tu perfil"));
     return {
       me,
       profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.user_id === user.id ? user.email ?? null : null,
@@ -280,11 +281,11 @@ export const supabaseBackend: Server = {
   // ── fotos: almacenamiento privado, se ven con una dirección firmada por un rato ──
   async uploadPhoto(path, file) {
     const { error } = await sb().storage.from('adjuntos').upload(path, file.data, { contentType: file.type, upsert: true });
-    if (error) throw new Error(/size|large/i.test(error.message) ? 'La foto pesa más de 2 MB.' : 'No se pudo subir la foto. Revisa tu conexión.');
+    if (error) throw new Error(/size|large/i.test(error.message) ? tr("La foto pesa más de 2 MB.") : tr("No se pudo subir la foto. Revisa tu conexión."));
   },
   async photoUrl(path) {
     const { data, error } = await sb().storage.from('adjuntos').createSignedUrl(path, 3600);
-    if (error || !data) throw new Error('No se pudo abrir la foto');
+    if (error || !data) throw new Error(tr("No se pudo abrir la foto"));
     return data.signedUrl;
   },
   // sin foto: null (la base la quita); los tipos de la base no saben que el texto puede faltar
@@ -297,9 +298,9 @@ export const supabaseBackend: Server = {
     const { data, error } = await sb().functions.invoke<ScanResult & { error?: string }>('leer-recibo', { body: { image, mime } });
     if (error) {
       const msg = await (error as { context?: Response }).context?.json?.().then((j: { error?: string }) => j?.error, () => null).catch(() => null);
-      throw new Error(msg || 'No se pudo leer el recibo. Prueba con una foto más clara o anótalo a mano.');
+      throw new Error(msg || tr("No se pudo leer el recibo. Prueba con una foto más clara o anótalo a mano."));
     }
-    if (!data || data.error) throw new Error(data?.error || 'No se pudo leer el recibo.');
+    if (!data || data.error) throw new Error(data?.error || tr("No se pudo leer el recibo."));
     return data;
   },
 };

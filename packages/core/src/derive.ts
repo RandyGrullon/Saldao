@@ -1,6 +1,7 @@
 import { involves, ledger, nets, pairTransfers, pairVal, simplify, toBase, type Expense, type Id, type LedgerItem } from './domain';
 import { fdate, moneyT, today } from './format';
 import type { Backend, Snapshot } from './types';
+import { tr } from './i18n';
 
 export const live = (s: Snapshot) => s.expenses.filter(e => !e.deletedAt);
 export const listOf = (s: Snapshot, g: Id) => live(s).filter(e => e.groupId === g);
@@ -30,8 +31,8 @@ export function hueOf(s: Snapshot, id: Id): number | null {
   const i = order.indexOf(id);
   return HUES[(i < 0 ? 0 : i) % HUES.length];
 }
-export const short = (s: Snapshot, id: Id) => id === s.me ? 'Tú' : (s.profiles[id]?.name.split(' ')[0] ?? 'Alguien');
-export const fullName = (s: Snapshot, id: Id) => id === s.me ? 'Tú' : (s.profiles[id]?.name ?? 'Alguien');
+export const short = (s: Snapshot, id: Id) => id === s.me ? tr("Tú") : (s.profiles[id]?.name.split(' ')[0] ?? tr("Alguien"));
+export const fullName = (s: Snapshot, id: Id) => id === s.me ? tr("Tú") : (s.profiles[id]?.name ?? tr("Alguien"));
 export const initials = (s: Snapshot, id: Id) => (s.profiles[id]?.name ?? '?').split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 
 /** Quién le debe a quién en el grupo: de a pares, o con «simplificar deudas», el menor número de pagos. */
@@ -85,8 +86,8 @@ export function myStatus(s: Snapshot, e: Expense) {
 
 export function paidText(s: Snapshot, e: Expense) {
   const ps = Object.keys(e.payers);
-  if (ps.length > 1) return `Pagaron ${ps.map(k => (k === s.me ? 'tú' : short(s, k))).join(' y ')}`;
-  return ps[0] === s.me ? `Pagaste ${moneyT(e.amount, e.currency)}` : `${short(s, ps[0])} pagó ${moneyT(e.amount, e.currency)}`;
+  if (ps.length > 1) return tr("Pagaron {0}", ps.map(k => (k === s.me ? tr("tú") : short(s, k))).join(tr(' y ')));
+  return ps[0] === s.me ? tr("Pagaste {0}", moneyT(e.amount, e.currency)) : tr("{0} pagó {1}", short(s, ps[0]), moneyT(e.amount, e.currency));
 }
 
 /**
@@ -113,5 +114,5 @@ export async function recordPay(b: Backend, s: Snapshot, from: Id, to: Id, amoun
 export function reminderText(s: Snapshot, p: Id, amount: number) {
   const open = whyItems(s, s.me, p).filter(it => it.left && !it.e.isPayment && it.x > 0);
   const lines = open.slice(0, 5).map(it => `• ${it.e.description} (${fdate(it.e.date)}): ${moneyT(it.left)}`).join('\n');
-  return `Hola ${short(s, p)}, según Saldao tenemos pendiente ${moneyT(amount)}:\n${lines}${open.length > 5 ? '\n…' : ''}\n\n${s.profiles[s.me]?.payout ? `Me puedes pagar a: ${s.profiles[s.me].payout}` : ''}`.trim();
+  return tr("Hola {0}, según Saldao tenemos pendiente {1}:\n{2}{3}\n\n{4}", short(s, p), moneyT(amount), lines, open.length > 5 ? '\n…' : '', s.profiles[s.me]?.payout ? tr("Me puedes pagar a: {0}", s.profiles[s.me].payout) : '').trim();
 }

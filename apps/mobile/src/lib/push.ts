@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { getBackend } from '@saldao/core';
+import { tr } from '@saldao/core';
 
 const KEY = 'saldao:aviso-token';
 const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
@@ -14,10 +15,10 @@ const inExpoGo = Constants.executionEnvironment === 'storeClient';
 
 /** null si se puede; si no, por qué. */
 export function pushUnavailable(): string | null {
-  if (Platform.OS === 'web') return 'En el navegador se activan desde la web de Saldao.';
-  if (!Device.isDevice) return 'Los avisos solo llegan a un teléfono de verdad.';
-  if (inExpoGo && Platform.OS === 'android') return 'En Expo Go para Android no llegan avisos: hace falta la app instalada.';
-  if (!projectId) return 'Los avisos llegan con la app instalada (falta conectarla a su proyecto de Expo).';
+  if (Platform.OS === 'web') return tr("En el navegador se activan desde la web de Saldao.");
+  if (!Device.isDevice) return tr("Los avisos solo llegan a un teléfono de verdad.");
+  if (inExpoGo && Platform.OS === 'android') return tr("En Expo Go para Android no llegan avisos: hace falta la app instalada.");
+  if (!projectId) return tr("Los avisos llegan con la app instalada (falta conectarla a su proyecto de Expo).");
   return null;
 }
 
@@ -40,9 +41,9 @@ export async function pushOn(): Promise<boolean> {
 export async function enablePush() {
   const why = pushUnavailable();
   if (why) throw new Error(why);
-  if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('default', { name: 'Saldao', importance: Notifications.AndroidImportance.DEFAULT });
+  if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('default', { name: tr("Saldao"), importance: Notifications.AndroidImportance.DEFAULT });
   const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') throw new Error('El teléfono no dio permiso para avisos. Actívalo en los ajustes.');
+  if (status !== 'granted') throw new Error(tr("El teléfono no dio permiso para avisos. Actívalo en los ajustes."));
   const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
   await getBackend()!.savePushToken('expo', token);
   await AsyncStorage.setItem(KEY, token);

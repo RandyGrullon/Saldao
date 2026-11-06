@@ -5,6 +5,7 @@ import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ANIM, F, R, SIZE, useC } from '../lib/theme';
 import { Txt } from './text';
+import { tr } from '@saldao/core';
 
 type Toast = { key: number; text: string; undo?: () => void };
 const Ctx = createContext<(text: string, undo?: () => void) => void>(() => {});
@@ -37,7 +38,7 @@ function ToastHost({ t, onDone }: { t: Toast | null; onDone: () => void }) {
           <Txt f="medium" s={15} color={c.toastInk} style={{ flexShrink: 1 }}>{t.text}</Txt>
           {t.undo && (
             <Pressable onPress={() => { t.undo?.(); onDone(); }} hitSlop={8} style={s.undo} accessibilityRole="button">
-              <Txt f="bold" s={15} color={c.toastAction}>Deshacer</Txt>
+              <Txt f="bold" s={15} color={c.toastAction}>{tr("Deshacer")}</Txt>
             </Pressable>
           )}
         </Animated.View>

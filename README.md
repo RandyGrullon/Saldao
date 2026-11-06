@@ -43,6 +43,29 @@ Está hecha solo para el teléfono: se instala, abre a pantalla completa y se co
 - Si la base rechaza algo enviado después (por ejemplo, ya no eres del grupo), la app lo avisa y se puede descartar.
 - Crear grupos, invitar y editar el perfil sí necesitan internet.
 
+**Grupos que se administran**
+- Cambiar el nombre y la foto, archivar, salir y simplificar deudas (el grupo salda con el menor número de pagos).
+- Grupos de fecha a fecha (un viaje, un evento): al pasar la última fecha el grupo propone saldar y archivar.
+- Personas: hacer o quitar admin, quitar a alguien (con sus cuentas saldadas) y cambiar el nombre de quien todavía no
+  tiene cuenta. Siempre queda al menos un admin.
+- Fondo común: cada uno aporta y los gastos salen del fondo; las deudas con el fondo se leen «El fondo te guarda».
+- Presupuesto del mes con barra y aviso al 80 %, y lista de compras en tiempo real que se convierte en gasto.
+
+**Anotar más rápido**
+- Escanear el recibo: una foto y Claude llena los ítems, el ITBIS y la ley (función `leer-recibo`, hasta 40 al día).
+- Foto del comprobante en cada gasto (privada, solo la ve el grupo).
+- Gastos que se repiten (cada semana, quincena, mes o año), «De siempre» con los que más repites, la tasa del dólar del
+  día al elegir US$ y dividir por noches.
+
+**Saber y cobrar**
+- «Para cobrar» en Inicio: quién te debe hace más de 15 días, con un toque para recordarle.
+- Resumen del mes por categoría y por grupo, buscar por texto, ítem, grupo, persona o categoría, y exportar a Excel
+  (CSV) o PDF.
+- Tu código QR para cobrar, con tus datos y el monto.
+- Avisos en el teléfono y en el navegador (función `avisar`), el contador de lo nuevo en el ícono y bloqueo con Face ID,
+  huella o Windows Hello.
+- En español o en inglés (Cuenta › Idioma). Empieza en español.
+
 ## Probar sin backend
 
 ```bash
@@ -113,6 +136,15 @@ Para entrar con Google desde la app nativa, cuando lo actives en Supabase, agreg
      - *Authorized redirect URI:* `https://<tu-ref>.supabase.co/auth/v1/callback`.
      - Pega el Client ID y el Secret en *Sign In / Providers → Google*.
 4. Arranca con `npm run dev`. Para probar en el teléfono, abre `http://TU-IP:5173` en la misma red wifi.
+5. Funciones de servidor (`supabase/functions/`), para leer recibos y mandar avisos:
+   - **Secretos** (*Edge Functions → Secrets*): `ANTHROPIC_API_KEY` (de console.anthropic.com), `VAPID_PUBLIC_KEY`,
+     `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` (están en `supabase/.secrets.local`, que no se sube) y `AVISOS_SECRETO`
+     (cualquier texto largo al azar). Si activaste la seguridad de Expo para avisos, también `EXPO_ACCESS_TOKEN`.
+   - **Publicar:** `npx supabase functions deploy leer-recibo` y `npx supabase functions deploy avisar --no-verify-jwt`.
+   - **Webhook de avisos** (*Database → Webhooks → Create*): tabla `activity`, evento *Insert*, tipo *Supabase Edge
+     Functions*, función `avisar`, con el encabezado `x-avisos` igual a `AVISOS_SECRETO`.
+   - `leer-recibo` usa `claude-opus-5-5` con formato JSON fijo y, si el modelo declina una foto, la API la reintenta sola
+     con otro modelo (`fallbacks`). Cada persona puede leer hasta 40 recibos al día (`scan_quota`).
 
 ## Seguridad
 
@@ -163,6 +195,13 @@ Corren en cada subida a GitHub (`.github/workflows/ci.yml`): tipos, pruebas y co
   sale sola al volver, no duplica, llega en orden, se guarda en el teléfono y cada cuenta tiene la suya.
 - `supabase/tests/db-types.test.ts` revisa que los tipos de la base estén al día con las migraciones (ver abajo).
 - `packages/core/src/core.test.ts` revisa que el núcleo no use nada del navegador, de Vite ni de React.
+- `packages/core/src/features.test.ts` prueba las mejoras del núcleo: fondo común, presupuesto, resumen del mes,
+  buscar, quién te debe hace mucho, exportar, el QR y los grupos de fecha a fecha.
+- `packages/core/src/i18n.test.ts` prueba el inglés y revisa que **toda** frase que pasa por `tr()` en la web, la app
+  nativa y el núcleo tenga su traducción en `en.ts`, con los mismos `{0}`, `{1}`… Si agregas un texto, agrégalo ahí.
+- `supabase/tests/functions.test.ts` prueba las funciones sin red: el cifrado de los avisos web (se descifra aparte,
+  como lo haría el navegador), la firma VAPID, a qué servicios se les manda, el texto de cada aviso y cómo se pasa un
+  recibo leído a la app.
 
 ### Tipos de la base
 
@@ -189,7 +228,9 @@ packages/core/       lo que comparten la web y la app nativa (sin navegador ni R
   src/app.ts         nombre de la app (un solo lugar)
   src/domain.ts      reglas de dinero, sin dependencias
   src/derive.ts      saldos, deudas y textos que salen de los datos
-  src/format.ts      RD$, fechas en español
+  src/format.ts      RD$ y fechas (en español o en inglés)
+  src/features.ts    las mejoras: fondo, presupuesto, resumen, buscar, exportar, QR, tasa del dólar, fechas del grupo
+  src/i18n.ts        tr(): el texto en español o su traducción de en.ts
   src/store.ts       la foto de los datos, la cola sin conexión y las acciones (cada app la conecta con sus hooks)
   src/queue.ts       cómo se ve la cola encima de la foto
   src/supabase.ts    sesión, lectura y escritura en Supabase (configurable: la web y la nativa pasan lo suyo)
@@ -204,16 +245,15 @@ src/                 la web (PWA)
   sheets/            nuevo gasto, saldar, pagar, grupos e invitaciones
 supabase/
   migrations/        esquema, RLS y funciones (save_expense valida que todo cuadre)
-  tests/             la migración probada en PGlite y el generador de tipos
+  functions/         leer-recibo (Claude) y avisar (Web Push y Expo), con lo que comparten en _shared
+  tests/             la migración probada en PGlite, el generador de tipos y las funciones
 .github/workflows/   pruebas automáticas en cada subida
 ```
 
 ## Lo que viene
 
-- **Ítems:** escaneo de recibos con IA (Edge Function) que llene los ítems.
-- **Notificaciones push:** Web Push con claves VAPID.
-- **Recurrentes:** gastos que se repiten con `pg_cron`.
-- **Tasas de cambio:** automáticas y diarias.
-- **Simplificar deudas:** como plan de pagos opcional.
-- **Búsqueda, gráficos y exportar.**
-- **Grupos:** salir, archivar, cambiar roles y foto.
+- **Avisos en el idioma de cada quien:** hoy los avisos salen en español; habría que guardar el idioma con cada
+  teléfono.
+- **App nativa publicada:** conectarla a su proyecto de Expo (EAS) para los avisos y las tiendas, con su id de paquete
+  definitivo (hoy `do.saldao.app`), y un widget de verdad en la pantalla de inicio.
+- **Términos y privacidad en inglés.**

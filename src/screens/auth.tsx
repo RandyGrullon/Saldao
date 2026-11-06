@@ -5,6 +5,7 @@ import { DELETED } from '../data/connect';
 import { Icon } from '../ui/icons';
 import { errMsg } from '../ui/kit';
 import { LegalLinks } from './legal';
+import { tr } from '@saldao/core';
 
 const MIN = 8;
 
@@ -17,13 +18,13 @@ const LINK_ERR = (() => {
   for (const k of ['error', 'error_code', 'error_description']) rest.delete(k);
   history.replaceState(history.state, '', location.pathname + (rest.toString() ? `?${rest}` : ''));
   return code === 'otp_expired'
-    ? 'Ese enlace ya venció o ya se usó. Si ya confirmaste tu correo, entra normal. Si no, escribe tu correo y pide otro.'
-    : 'No pudimos abrir ese enlace. Entra con tu correo y contraseña o pide otro correo.';
+    ? tr("Ese enlace ya venció o ya se usó. Si ya confirmaste tu correo, entra normal. Si no, escribe tu correo y pide otro.")
+    : tr("No pudimos abrir ese enlace. Entra con tu correo y contraseña o pide otro correo.");
 })();
 
 // Después de borrar la cuenta, la pantalla de entrar lo confirma una vez.
 function justDeleted() {
-  try { if (sessionStorage.getItem(DELETED)) { sessionStorage.removeItem(DELETED); return 'Tu cuenta se borró. Gracias por usar Saldao.'; } } catch { /* sin almacenamiento */ }
+  try { if (sessionStorage.getItem(DELETED)) { sessionStorage.removeItem(DELETED); return tr("Tu cuenta se borró. Gracias por usar Saldao."); } } catch { /* sin almacenamiento */ }
   return '';
 }
 
@@ -36,7 +37,7 @@ function PasswordField({ label, value, onChange, autoComplete }: {
       <span className="pass">
         <input className="field" type={show ? 'text' : 'password'} autoComplete={autoComplete} value={value} required
           autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={e => onChange(e.target.value)} />
-        <button type="button" className="pass-eye" aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'} onClick={() => setShow(v => !v)}>
+        <button type="button" className="pass-eye" aria-label={show ? tr("Ocultar contraseña") : tr("Mostrar contraseña")} onClick={() => setShow(v => !v)}>
           <Icon n={show ? 'eyeOff' : 'eye'} />
         </button>
       </span>
@@ -81,10 +82,10 @@ export function AuthScreen() {
       if (mode === 'login') await signIn(em, pass);
       else if (mode === 'register') {
         const { needsConfirm } = await signUp(name.trim(), username, em, pass);
-        if (needsConfirm) { setMode('login'); setPass(''); setResend(true); setResendTo(em); setInfo(`Te enviamos un correo a ${em}. Abre el enlace para activar tu cuenta y luego entra aquí.`); }
+        if (needsConfirm) { setMode('login'); setPass(''); setResend(true); setResendTo(em); setInfo(tr("Te enviamos un correo a {0}. Abre el enlace para activar tu cuenta y luego entra aquí.", em)); }
       } else {
         await sendPasswordReset(em);
-        setInfo(`Si hay una cuenta con ${em}, te llegará un enlace para crear una contraseña nueva. Revisa también spam.`);
+        setInfo(tr("Si hay una cuenta con {0}, te llegará un enlace para crear una contraseña nueva. Revisa también spam.", em));
       }
     } catch (err) {
       setMsg(errMsg(err));
@@ -95,52 +96,50 @@ export function AuthScreen() {
     setBusy(true); setMsg(''); setInfo('');
     try {
       await resendConfirmation(to);
-      setInfo(`Te enviamos otro correo a ${to}. Abre el enlace para activar tu cuenta. Revisa también spam.`);
+      setInfo(tr("Te enviamos otro correo a {0}. Abre el enlace para activar tu cuenta. Revisa también spam.", to));
     } catch (err) { setMsg(errMsg(err)); } finally { setBusy(false); }
   };
 
   return (
     <main className="gate">
       <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{APP.name}</h1><p className="lead">{APP.description}</p></div>
-      {mode === 'reset' ? <p className="note">Escribe tu correo y te mandamos un enlace para crear una contraseña nueva.</p> : (
-        <div className="seg" role="tablist" aria-label="Entrar o crear cuenta">
-          <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => go('login')}>Entrar</button>
-          <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => go('register')}>Crear cuenta</button>
+      {mode === 'reset' ? <p className="note">{tr("Escribe tu correo y te mandamos un enlace para crear una contraseña nueva.")}</p> : (
+        <div className="seg" role="tablist" aria-label={tr("Entrar o crear cuenta")}>
+          <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => go('login')}>{tr("Entrar")}</button>
+          <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => go('register')}>{tr("Crear cuenta")}</button>
         </div>
       )}
       <form className="form" onSubmit={submit} noValidate>
-        {mode === 'register' && <label>Tu nombre
-          <input className="field" autoComplete="name" autoCapitalize="words" enterKeyHint="next" maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Como te conocen tus amigos" /></label>}
+        {mode === 'register' && <label>{tr("Tu nombre")}<input className="field" autoComplete="name" autoCapitalize="words" enterKeyHint="next" maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder={tr("Como te conocen tus amigos")} /></label>}
         {mode === 'register' && <>
-          <label>Usuario
-            <input className="field" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" maxLength={20}
-              value={username} onChange={e => setUsername(typedUser(e.target.value))} placeholder="Para entrar sin escribir tu correo" /></label>
-          {username && (!userOk ? <p className="err">{USERNAME_RULE}</p>
-            : free === false ? <p className="err">Ese usuario ya lo tiene otra persona.</p>
-            : free && <p className="note"><Icon n="check" sm /> @{username} está libre</p>)}
+          <label>{tr("Usuario")}<input className="field" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" maxLength={20}
+              value={username} onChange={e => setUsername(typedUser(e.target.value))} placeholder={tr("Para entrar sin escribir tu correo")} /></label>
+          {username && (!userOk ? <p className="err">{tr(USERNAME_RULE)}</p>
+            : free === false ? <p className="err">{tr("Ese usuario ya lo tiene otra persona.")}</p>
+            : free && <p className="note"><Icon n="check" sm />{" "}{tr("@{0} está libre", username)}</p>)}
         </>}
-        <label>{mode === 'login' ? 'Correo o usuario' : 'Correo'}
+        <label>{mode === 'login' ? tr("Correo o usuario") : tr("Correo")}
           <input className="field" type={mode === 'login' ? 'text' : 'email'} inputMode="email" autoComplete={mode === 'login' ? 'username' : 'email'}
             autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint={mode === 'reset' ? 'send' : 'next'}
-            value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'login' ? 'tu@correo.com o tu usuario' : 'tu@correo.com'} /></label>
-        {mode !== 'reset' && <PasswordField label={mode === 'register' ? `Contraseña (mínimo ${MIN} caracteres)` : 'Contraseña'}
+            value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'login' ? tr("tu@correo.com o tu usuario") : tr("tu@correo.com")} /></label>
+        {mode !== 'reset' && <PasswordField label={mode === 'register' ? tr("Contraseña (mínimo {0} caracteres)", MIN) : tr("Contraseña")}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={pass} onChange={setPass} />}
         {mode === 'register' && <label className="agree"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
-          <span>Acepto los <LegalLinks />.</span></label>}
+          <span>{tr("Acepto los")}{" "}<LegalLinks />.</span></label>}
         <button className="btn primary block tap" disabled={busy || !valid}>
-          {busy ? 'Un momento…' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Crear cuenta' : 'Enviarme el enlace'}</button>
+          {busy ? tr("Un momento…") : mode === 'login' ? tr("Entrar") : mode === 'register' ? tr("Crear cuenta") : tr("Enviarme el enlace")}</button>
       </form>
       {mode !== 'reset' && <>
-        <p className="or">o</p>
+        <p className="or">{tr("o")}</p>
         <button type="button" className="btn block tap" disabled={busy}
           onClick={() => { setBusy(true); setMsg(''); signInWithGoogle().catch(err => { setMsg(errMsg(err)); setBusy(false); }); }}>
-          <Icon n="google" />Continuar con Google</button>
+          <Icon n="google" />{tr("Continuar con Google")}</button>
       </>}
-      {mode === 'login' && <button type="button" className="link tap" onClick={() => go('reset')}>¿Olvidaste tu contraseña?</button>}
-      {mode === 'reset' && <button type="button" className="link tap" onClick={() => go('login')}>Volver a entrar</button>}
+      {mode === 'login' && <button type="button" className="link tap" onClick={() => go('reset')}>{tr("¿Olvidaste tu contraseña?")}</button>}
+      {mode === 'reset' && <button type="button" className="link tap" onClick={() => go('login')}>{tr("Volver a entrar")}</button>}
       {info && <p className="note" role="status">{info}</p>}
       {msg && <p className="err" role="alert">{msg}</p>}
-      {mode === 'login' && resend && <button type="button" className="link tap" disabled={busy || !to.includes('@')} onClick={again}>Reenviar el correo de confirmación</button>}
+      {mode === 'login' && resend && <button type="button" className="link tap" disabled={busy || !to.includes('@')} onClick={again}>{tr("Reenviar el correo de confirmación")}</button>}
     </main>
   );
 }
@@ -153,7 +152,7 @@ export function NewPasswordScreen({ onDone }: { onDone: () => void }) {
   const [msg, setMsg] = useState('');
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (pass !== pass2) return setMsg('Las contraseñas no coinciden.');
+    if (pass !== pass2) return setMsg(tr("Las contraseñas no coinciden."));
     setBusy(true); setMsg('');
     try {
       await setNewPassword(pass);
@@ -163,11 +162,11 @@ export function NewPasswordScreen({ onDone }: { onDone: () => void }) {
   };
   return (
     <main className="gate">
-      <div><h1>Contraseña nueva</h1><p className="lead">Elige una de al menos {MIN} caracteres.</p></div>
+      <div><h1>{tr("Contraseña nueva")}</h1><p className="lead">{tr("Elige una de al menos {0} caracteres.", MIN)}</p></div>
       <form className="form" onSubmit={submit} noValidate>
-        <PasswordField label="Contraseña nueva" autoComplete="new-password" value={pass} onChange={setPass} />
-        <PasswordField label="Repítela" autoComplete="new-password" value={pass2} onChange={setPass2} />
-        <button className="btn primary block tap" disabled={busy || pass.length < MIN || !pass2}>{busy ? 'Guardando…' : 'Guardar y entrar'}</button>
+        <PasswordField label={tr("Contraseña nueva")} autoComplete="new-password" value={pass} onChange={setPass} />
+        <PasswordField label={tr("Repítela")} autoComplete="new-password" value={pass2} onChange={setPass2} />
+        <button className="btn primary block tap" disabled={busy || pass.length < MIN || !pass2}>{busy ? tr("Guardando…") : tr("Guardar y entrar")}</button>
       </form>
       {msg && <p className="err" role="alert">{msg}</p>}
     </main>

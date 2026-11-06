@@ -3,11 +3,12 @@ import { canEdit, cat, curSym, dayNum, fdate, fullName, groupOf, hueOf, initials
 import { useSnap } from '../data/store';
 import { Icon, type IconName } from './icons';
 import { buzz, useNav } from './nav';
+import { tr, trError } from '@saldao/core';
 
 export const useS = () => useSnap() as Snapshot;
 export const errMsg = (e: unknown) => {
   const m = (e as { message?: string })?.message;
-  return m && !/fetch|network/i.test(m) ? m : 'No se pudo completar. Revisa tu conexión e intenta de nuevo.';
+  return m && !/fetch|network/i.test(m) ? trError(m) : tr("No se pudo completar. Revisa tu conexión e intenta de nuevo.");
 };
 
 /** Ejecuta una acción, avisa con un toast y ofrece deshacer cuando se puede. */
@@ -72,7 +73,7 @@ export function Empty({ icon, title, children, action }: { icon: IconName; title
 /** La forma de Inicio mientras llegan tus cuentas: el saldo y unas filas que brillan. */
 export function HomeSkeleton() {
   return (
-    <div className="sk-page" aria-busy="true" aria-label="Cargando">
+    <div className="sk-page" aria-busy="true" aria-label={tr("Cargando")}>
       <div className="skeleton" style={{ width: 120, height: 14 }} />
       <div className="skeleton" style={{ width: 200, height: 30, marginBottom: 6 }} />
       <div className="skeleton" style={{ height: 250, borderRadius: 22 }} />
@@ -87,33 +88,33 @@ export function HomeSkeleton() {
 
 /** Saldo con alguien o en un grupo: + te deben (verde), − debes (tinta), cero a mano. */
 export function BalText({ c, who }: { c: number; who?: boolean }) {
-  if (c > 0) return <span className="end pos"><span className="lbl">{who ? 'te debe' : 'te deben'}</span><Money c={c} sign /></span>;
-  if (c < 0) return <span className="end neg"><span className="lbl">{who ? 'le debes' : 'debes'}</span><Money c={-c} /></span>;
-  return <span className="end zero"><span className="lbl">a mano</span></span>;
+  if (c > 0) return <span className="end pos"><span className="lbl">{who ? tr("te debe") : tr("te deben")}</span><Money c={c} sign /></span>;
+  if (c < 0) return <span className="end neg"><span className="lbl">{who ? tr("le debes") : tr("debes")}</span><Money c={-c} /></span>;
+  return <span className="end zero"><span className="lbl">{tr("a mano")}</span></span>;
 }
 
 export function payText(s: Snapshot, e: Expense) {
   const from = Object.keys(e.payers)[0], to = Object.keys(e.shares)[0];
-  if (from === s.me) return <>Le pagaste a <b>{short(s, to)}</b></>;
-  if (to === s.me) return <><b>{short(s, from)}</b> te pagó</>;
-  return <><b>{short(s, from)}</b> le pagó a <b>{short(s, to)}</b></>;
+  if (from === s.me) return <>{tr("Le pagaste a")}{" "}<b>{short(s, to)}</b></>;
+  if (to === s.me) return <><b>{short(s, from)}</b>{" "}{tr("te pagó")}</>;
+  return <><b>{short(s, from)}</b>{" "}{tr("le pagó a")}{" "}<b>{short(s, to)}</b></>;
 }
 /** Cuánto mueve este gasto tu saldo. */
 export function Impact({ e }: { e: Expense }) {
   const s = useS(), m = mineOf(s, e);
-  if (e.isPayment) return m > 0 ? <span className="end pos"><span className="lbl">pagaste</span><Money c={m} /></span>
-    : m < 0 ? <span className="end"><span className="lbl">recibiste</span><Money c={-m} /></span> : <span className="end zero"><span className="lbl">no participas</span></span>;
-  if (m > 0) return <span className="end pos"><span className="lbl">prestaste</span><Money c={m} sign /></span>;
-  if (m < 0) return <span className="end neg"><span className="lbl">te prestaron</span><Money c={-m} /></span>;
-  return <span className="end zero"><span className="lbl">{involves(e, s.me) ? 'pagaste lo tuyo' : 'no participas'}</span></span>;
+  if (e.isPayment) return m > 0 ? <span className="end pos"><span className="lbl">{tr("pagaste")}</span><Money c={m} /></span>
+    : m < 0 ? <span className="end"><span className="lbl">{tr("recibiste")}</span><Money c={-m} /></span> : <span className="end zero"><span className="lbl">{tr("no participas")}</span></span>;
+  if (m > 0) return <span className="end pos"><span className="lbl">{tr("prestaste")}</span><Money c={m} sign /></span>;
+  if (m < 0) return <span className="end neg"><span className="lbl">{tr("te prestaron")}</span><Money c={-m} /></span>;
+  return <span className="end zero"><span className="lbl">{involves(e, s.me) ? tr("pagaste lo tuyo") : tr("no participas")}</span></span>;
 }
 
 /** ¿Ya se saldó este movimiento? */
 export function ItemStatus({ it }: { it: LedgerItem }) {
-  if (!it.left) return <Pill tone="ok">{it.e.isPayment ? 'aplicado' : 'saldado'}{it.closedAt ? ` ${fdate(it.closedAt)}` : ''}</Pill>;
-  if (it.e.isPayment) return <Pill>{it.covers.length ? `sobran ${moneyT(it.left)}` : 'a favor'}</Pill>;
-  if (it.left < Math.abs(it.x)) return <Pill tone="warn">quedan {moneyT(it.left)}</Pill>;
-  return <Pill tone="warn">pendiente</Pill>;
+  if (!it.left) return <Pill tone="ok">{it.e.isPayment ? tr("aplicado") : tr("saldado")}{it.closedAt ? ` ${fdate(it.closedAt)}` : ''}</Pill>;
+  if (it.e.isPayment) return <Pill>{it.covers.length ? tr("sobran {0}", moneyT(it.left)) : tr("a favor")}</Pill>;
+  if (it.left < Math.abs(it.x)) return <Pill tone="warn">{tr("quedan {0}", moneyT(it.left))}</Pill>;
+  return <Pill tone="warn">{tr("pendiente")}</Pill>;
 }
 
 /** Un renglón del porqué, visto desde a: + suma a lo que b le debe a a. */
@@ -121,10 +122,10 @@ export function WhyRow({ it, a, b, showGroup }: { it: LedgerItem & { groupId?: I
   const s = useS(), nav = useNav(), e = it.e, debtor = it.x > 0 ? b : a, share = e.shares[debtor] || 0;
   const g = showGroup && it.groupId ? groupOf(s, it.groupId) : null;
   const sub = e.isPayment
-    ? (it.covers.length ? `Cubrió ${it.covers.map(c => `«${c.description}»`).join(', ')}${it.left ? ` y sobraron ${moneyT(it.left)}` : ''}` : 'Quedó como saldo a favor')
-    : `${paidText(s, e)} · ${debtor === s.me ? 'tu parte' : `parte de ${short(s, debtor)}`} ${moneyT(share, e.currency)}${g && g.kind !== 'directo' ? ` · ${g.name}` : ''}`;
+    ? (it.covers.length ? tr("Cubrió {0}{1}", it.covers.map(c => `«${c.description}»`).join(', '), it.left ? tr(" y sobraron {0}", moneyT(it.left)) : '') : tr("Quedó como saldo a favor"))
+    : `${paidText(s, e)} · ${debtor === s.me ? tr("tu parte") : tr("parte de {0}", short(s, debtor))} ${moneyT(share, e.currency)}${g && g.kind !== 'directo' ? ` · ${g.name}` : ''}`;
   const closed = it.closedBy && !it.left && !e.isPayment
-    ? ` · se saldó con ${it.closedBy.isPayment ? `el pago del ${fdate(it.closedBy.date)}` : `«${it.closedBy.description}»`}` : '';
+    ? tr(" · se saldó con {0}", it.closedBy.isPayment ? tr("el pago del {0}", fdate(it.closedBy.date)) : `«${it.closedBy.description}»`) : '';
   return (
     <li>
       <button className="row tap" onClick={() => nav.push({ kind: 'expense', id: e.id })}>
@@ -147,10 +148,10 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
       <span className="main">
         <span className="t">{e.isPayment ? payText(s, e) : e.description}</span>
         <span className="s">
-          {e.pending && <Pill>sin enviar</Pill>}
-          {e.isPayment ? <>{moneyT(e.amount, e.currency)} · {fdate(e.date)}{e.paymentStatus === 'pendiente' && <Pill tone="warn">por confirmar</Pill>}</>
+          {e.pending && <Pill>{tr("sin enviar")}</Pill>}
+          {e.isPayment ? <>{moneyT(e.amount, e.currency)} · {fdate(e.date)}{e.paymentStatus === 'pendiente' && <Pill tone="warn">{tr("por confirmar")}</Pill>}</>
             : <>{paidText(s, e)} · {fdate(e.date)}{showGroup && g && g.kind !== 'directo' ? ` · ${g.name}` : ''}
-              {status && <Pill tone={status.done === status.total ? 'ok' : undefined}>{status.done === status.total ? 'saldado' : `${status.done} de ${status.total} saldados`}</Pill>}</>}
+              {status && <Pill tone={status.done === status.total ? 'ok' : undefined}>{status.done === status.total ? tr("saldado") : tr("{0} de {1} saldados", status.done, status.total)}</Pill>}</>}
         </span>
       </span>
       <span className="end-wrap"><Impact e={e} /></span>
@@ -160,8 +161,8 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
   return (
     <li className="swipe">
       {row}
-      <button className="swipe-act tap" tabIndex={-1} onClick={() => act(b => b.deleteExpense(e.id), e.isPayment ? 'Pago eliminado' : 'Gasto eliminado', b => b.restoreExpense(e.id))}>
-        <Icon n="trash" /><span>Eliminar</span>
+      <button className="swipe-act tap" tabIndex={-1} onClick={() => act(b => b.deleteExpense(e.id), e.isPayment ? tr("Pago eliminado") : tr("Gasto eliminado"), b => b.restoreExpense(e.id))}>
+        <Icon n="trash" /><span>{tr("Eliminar")}</span>
       </button>
     </li>
   );

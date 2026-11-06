@@ -1,3 +1,5 @@
+import { tr } from './i18n';
+
 // El ícono es un nombre: cada app lo dibuja con su juego de íconos (la web revisa al compilar que existan todos).
 export type CatIcon = 'home' | 'bolt' | 'drop' | 'wifi' | 'cart' | 'food' | 'fuel' | 'car' | 'bed' | 'compass' | 'heart' | 'gift' | 'receipt' | 'swap';
 
@@ -17,7 +19,8 @@ export const CATS: Record<string, { name: string; icon: CatIcon }> = {
   general: { name: 'General', icon: 'receipt' },
   pago: { name: 'Pago', icon: 'swap' },
 };
-export const cat = (k: string) => CATS[k] ?? CATS.general;
+/** La categoría con su nombre en el idioma elegido. */
+export const cat = (k: string) => { const c = CATS[k] ?? CATS.general; return { ...c, name: tr(c.name) }; };
 
 const GUESS: [RegExp, string][] = [
   [/alquil|renta/i, 'alquiler'], [/luz|ede(norte|sur|este)|electric/i, 'luz'], [/agua|caasd|coraasan|botell[oó]n/i, 'agua'],

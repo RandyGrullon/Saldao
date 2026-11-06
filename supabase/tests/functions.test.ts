@@ -6,12 +6,13 @@ import { toScan } from '../functions/_shared/recibo';
 import { b64u, encrypt, parseSubscription, vapidAuth } from '../functions/_shared/webpush';
 
 const enc = new TextEncoder();
-const concat = (...xs: Uint8Array[]) => { const o = new Uint8Array(xs.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of xs) { o.set(x, i); i += x.length; } return o; };
-const hkdf = async (salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, bits: number) =>
+type Bytes = Uint8Array<ArrayBuffer>;
+const concat = (...xs: Uint8Array[]): Bytes => { const o = new Uint8Array(xs.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of xs) { o.set(x, i); i += x.length; } return o; };
+const hkdf = async (salt: Bytes, ikm: Bytes, info: Bytes, bits: number) =>
   new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']), bits));
 
 /** El lado del navegador (RFC 8291), escrito aparte: lo que la función cifra, esto lo tiene que poder abrir. */
-async function decrypt(body: Uint8Array, ua: CryptoKeyPair, auth: Uint8Array) {
+async function decrypt(body: Bytes, ua: CryptoKeyPair, auth: Bytes) {
   const salt = body.slice(0, 16), idlen = body[20], asPub = body.slice(21, 21 + idlen), ct = body.slice(21 + idlen);
   const uaPub = new Uint8Array(await crypto.subtle.exportKey('raw', ua.publicKey));
   const asKey = await crypto.subtle.importKey('raw', asPub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);

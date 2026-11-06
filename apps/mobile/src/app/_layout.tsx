@@ -30,6 +30,8 @@ import { setBadge } from '../lib/push';
 import { AppState } from 'react-native';
 import { Notice } from '../screens/auth';
 import { ToastProvider } from '../ui/toast';
+import { tr } from '@saldao/core';
+import { useLang } from '../lib/lang';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -54,6 +56,7 @@ function App() {
   const [err, setErr] = useState('');
   const user = useRef<string | null | undefined>(undefined);
   const snap = useSnap();
+  const lang = useLang();
 
   const boot = useCallback(async (uid: string | null) => {
     if (uid === user.current) return;
@@ -100,16 +103,16 @@ function App() {
     return () => sub.remove();
   }, []);
 
-  if (!fonts || !themeReady || phase === 'boot' || locked === null) return null;
+  if (!fonts || !themeReady || phase === 'boot' || locked === null || !lang.ready) return null;
   if (locked && phase === 'ready') return (
-    <Notice title="Saldao está bloqueado" text="Usa Face ID, la huella o el PIN del teléfono para ver tus cuentas."
-      action={{ title: 'Desbloquear', onPress: () => { unlock().then(ok => { if (ok) setLocked(false); }); } }} />
+    <Notice title={tr("Saldao está bloqueado")} text={tr("Usa Face ID, la huella o el PIN del teléfono para ver tus cuentas.")}
+      action={{ title: tr("Desbloquear"), onPress: () => { unlock().then(ok => { if (ok) setLocked(false); }); } }} />
   );
   const ready = phase === 'ready' && !!snap;
   const legal = ready && !snap!.legalOk;
   const modal = { presentation: 'modal', animation: Platform.OS === 'android' ? 'slide_from_bottom' : undefined } as const;
   return (
-    <PhaseCtx.Provider value={ctx}>
+    <PhaseCtx.Provider value={ctx} key={lang.lang}>
       <StatusBar style={c.isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }}>
         <Stack.Protected guard={phase === 'login'}><Stack.Screen name="entrar" options={{ animation: 'fade' }} /></Stack.Protected>

@@ -3,10 +3,11 @@ import { APP, getBackend, moneyT, myTotals, PRIVACY_URL, run, TERMS_URL } from '
 import { Icon } from '../ui/icons';
 import { errMsg, useS } from '../ui/kit';
 import { SheetHead, useNav } from '../ui/nav';
+import { tr } from '@saldao/core';
 
 /** Los dos enlaces, para abrir en otra pestaña (en la app instalada abren el navegador). */
 export const LegalLinks = () => (
-  <><a href={TERMS_URL} target="_blank" rel="noopener">Términos de uso</a> y la <a href={PRIVACY_URL} target="_blank" rel="noopener">Política de privacidad</a></>
+  <><a href={TERMS_URL} target="_blank" rel="noopener">{tr("Términos de uso")}</a>{" "}{tr("y la")}{" "}<a href={PRIVACY_URL} target="_blank" rel="noopener">{tr("Política de privacidad")}</a></>
 );
 
 /**
@@ -22,17 +23,17 @@ export function LegalGate() {
   };
   return (
     <main className="gate">
-      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>Antes de seguir</h1>
-        <p className="lead">Lee y acepta cómo funciona {APP.name} y qué hacemos con tus datos.</p></div>
+      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{tr("Antes de seguir")}</h1>
+        <p className="lead">{tr("Lee y acepta cómo funciona {0} y qué hacemos con tus datos.", APP.name)}</p></div>
       <ul className="legal-sum card">
-        <li><Icon n="users" />Las personas de tus grupos ven tu nombre, los gastos que comparten y dónde te pagan. Tu correo, no.</li>
-        <li><Icon n="swap" />{APP.name} no mueve dinero: anota lo que pagan entre ustedes.</li>
-        <li><Icon n="eyeOff" />No vendemos tus datos ni mostramos anuncios.</li>
-        <li><Icon n="trash" />Puedes borrar tu cuenta cuando quieras desde Cuenta.</li>
+        <li><Icon n="users" />{tr("Las personas de tus grupos ven tu nombre, los gastos que comparten y dónde te pagan. Tu correo, no.")}</li>
+        <li><Icon n="swap" />{tr("{0} no mueve dinero: anota lo que pagan entre ustedes.", APP.name)}</li>
+        <li><Icon n="eyeOff" />{tr("No vendemos tus datos ni mostramos anuncios.")}</li>
+        <li><Icon n="trash" />{tr("Puedes borrar tu cuenta cuando quieras desde Cuenta.")}</li>
       </ul>
-      <p className="note">Al seguir aceptas los <LegalLinks />.</p>
-      <button className="btn primary block tap" disabled={busy} onClick={accept}>{busy ? 'Un momento…' : 'Aceptar y seguir'}</button>
-      <button className="link tap" disabled={busy} onClick={() => run(b => b.signOut()).catch(() => location.reload())}>Salir</button>
+      <p className="note">{tr("Al seguir aceptas los")}{" "}<LegalLinks />.</p>
+      <button className="btn primary block tap" disabled={busy} onClick={accept}>{busy ? tr("Un momento…") : tr("Aceptar y seguir")}</button>
+      <button className="link tap" disabled={busy} onClick={() => run(b => b.signOut()).catch(() => location.reload())}>{tr("Salir")}</button>
       {msg && <p className="err" role="alert">{msg}</p>}
     </main>
   );
@@ -51,28 +52,27 @@ export function DeleteAccountSheet() {
   };
   return (
     <>
-      <SheetHead title="Borrar mi cuenta" />
+      <SheetHead title={tr("Borrar mi cuenta")} />
       <div className="scroll sheet-scroll pad">
-        {(t.owed > 0 || t.owe > 0) && <p className="split-status bad">Tienes saldos abiertos: te deben {moneyT(t.owed)} y debes {moneyT(t.owe)}. Quedan anotados en los grupos.</p>}
+        {(t.owed > 0 || t.owe > 0) && <p className="split-status bad">{tr("Tienes saldos abiertos: te deben {0} y debes {1}. Quedan anotados en los grupos.", moneyT(t.owed), moneyT(t.owe))}</p>}
         <section className="card plain-card">
-          <h2>Se borra</h2>
+          <h2>{tr("Se borra")}</h2>
           <ul className="legal-sum">
-            <li><Icon n="out" />Tu acceso: no podrás volver a entrar con este correo ni con tu usuario.</li>
-            <li><Icon n="mail" />Tu correo, tu usuario y dónde te pagan.</li>
-            <li><Icon n="trash" />Los grupos donde no queda nadie más con cuenta, con todos sus gastos.</li>
+            <li><Icon n="out" />{tr("Tu acceso: no podrás volver a entrar con este correo ni con tu usuario.")}</li>
+            <li><Icon n="mail" />{tr("Tu correo, tu usuario y dónde te pagan.")}</li>
+            <li><Icon n="trash" />{tr("Los grupos donde no queda nadie más con cuenta, con todos sus gastos.")}</li>
           </ul>
         </section>
         <section className="card plain-card">
-          <h2>Se queda en los grupos</h2>
+          <h2>{tr("Se queda en los grupos")}</h2>
           <ul className="legal-sum">
-            <li><Icon n="receipt" />Los gastos, pagos y comentarios que compartiste, con tu nombre: también son las cuentas de las otras personas.</li>
+            <li><Icon n="receipt" />{tr("Los gastos, pagos y comentarios que compartiste, con tu nombre: también son las cuentas de las otras personas.")}</li>
           </ul>
         </section>
-        <label className="form-label">Escribe BORRAR para confirmar
-          <input className="field" value={word} onChange={e => setWord(e.target.value)} autoCapitalize="characters" autoCorrect="off" spellCheck={false}
-            autoComplete="off" enterKeyHint="done" aria-label="Escribe BORRAR para confirmar" /></label>
-        <button className="btn danger-solid block tap" disabled={!ready || busy} onClick={go}><Icon n="trash" sm />{busy ? 'Borrando…' : 'Borrar mi cuenta para siempre'}</button>
-        <p className="note center">Esto no se puede deshacer.</p>
+        <label className="form-label">{tr("Escribe BORRAR para confirmar")}<input className="field" value={word} onChange={e => setWord(e.target.value)} autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+            autoComplete="off" enterKeyHint="done" aria-label={tr("Escribe BORRAR para confirmar")} /></label>
+        <button className="btn danger-solid block tap" disabled={!ready || busy} onClick={go}><Icon n="trash" sm />{busy ? tr("Borrando…") : tr("Borrar mi cuenta para siempre")}</button>
+        <p className="note center">{tr("Esto no se puede deshacer.")}</p>
       </div>
     </>
   );

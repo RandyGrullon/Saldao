@@ -1,6 +1,7 @@
 // Avisos en la web (Web Push): el navegador se suscribe con la clave pública y la suscripción se guarda en la cuenta.
 // En iPhone solo funcionan con la app instalada en la pantalla de inicio (iOS 16.4 o más nuevo).
 import { APP, getBackend } from '@saldao/core';
+import { tr } from '@saldao/core';
 
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
@@ -19,7 +20,7 @@ export async function pushOn(): Promise<boolean> {
 }
 export async function enablePush() {
   const perm = await Notification.requestPermission();
-  if (perm !== 'granted') throw new Error('El navegador no dio permiso para avisos. Actívalo en la configuración del sitio.');
+  if (perm !== 'granted') throw new Error(tr("El navegador no dio permiso para avisos. Actívalo en la configuración del sitio."));
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(APP.vapidPublicKey) });
   await getBackend()!.savePushToken('web', JSON.stringify(sub));

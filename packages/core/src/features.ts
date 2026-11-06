@@ -5,9 +5,10 @@ import { create as createQr } from 'qrcode';
 import { cat } from './categories';
 import { friendBal, friends, groupOf, live, listOf, pendingInfo, short } from './derive';
 import { toBase, type Expense, type Id, type Transfer } from './domain';
-import { fdate, moneyT, today } from './format';
+import { fdate, moneyT, MONTHS, today } from './format';
 import { newId } from './queue';
 import type { Snapshot } from './types';
+import { getLang, tr } from './i18n';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 export const thisMonth = () => today().slice(0, 7);
@@ -20,9 +21,9 @@ export const fundOf = (s: Snapshot, g: Id): Id | null => groupOf(s, g)?.members.
 /** Lo que queda en el fondo: lo que se le aportó menos lo que pagó. */
 /** Cómo se lee una deuda; con el fondo común, lo que el fondo guarda de cada uno o lo que falta aportar. */
 export function xferTitle(s: Snapshot, t: Transfer) {
-  if (isFund(s, t.from)) return t.to === s.me ? 'El fondo te guarda' : `El fondo le guarda a ${short(s, t.to)}`;
-  if (isFund(s, t.to)) return t.from === s.me ? 'Te falta aportar al fondo' : `A ${short(s, t.from)} le falta aportar`;
-  return t.from === s.me ? `Le debes a ${short(s, t.to)}` : t.to === s.me ? `${short(s, t.from)} te debe` : `${short(s, t.from)} le debe a ${short(s, t.to)}`;
+  if (isFund(s, t.from)) return t.to === s.me ? tr("El fondo te guarda") : tr("El fondo le guarda a {0}", short(s, t.to));
+  if (isFund(s, t.to)) return t.from === s.me ? tr("Te falta aportar al fondo") : tr("A {0} le falta aportar", short(s, t.from));
+  return t.from === s.me ? tr("Le debes a {0}", short(s, t.to)) : t.to === s.me ? tr("{0} te debe", short(s, t.from)) : tr("{0} le debe a {1}", short(s, t.from), short(s, t.to));
 }
 export function fundLeft(s: Snapshot, g: Id): number {
   const f = fundOf(s, g);
@@ -33,9 +34,9 @@ export function fundLeft(s: Snapshot, g: Id): number {
 // ── grupos de fecha a fecha ──────────────────────────────────
 /** «Del 20 al 27 dic», «Desde el 20 dic» o «Hasta el 27 dic». */
 export function groupDates(g: { startsOn: string | null; endsOn: string | null }) {
-  if (g.startsOn && g.endsOn) return `Del ${fdate(g.startsOn)} al ${fdate(g.endsOn)}`;
-  if (g.startsOn) return `Desde el ${fdate(g.startsOn)}`;
-  if (g.endsOn) return `Hasta el ${fdate(g.endsOn)}`;
+  if (g.startsOn && g.endsOn) return tr("Del {0} al {1}", fdate(g.startsOn), fdate(g.endsOn));
+  if (g.startsOn) return tr("Desde el {0}", fdate(g.startsOn));
+  if (g.endsOn) return tr("Hasta el {0}", fdate(g.endsOn));
   return '';
 }
 /** Ya pasó la fecha de fin: toca saldar y archivar. */
@@ -80,8 +81,7 @@ export function monthStats(s: Snapshot, month = thisMonth()): MonthStats {
     top: [...list].sort((a, b) => mine(b) - mine(a)).slice(0, 5),
   };
 }
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-export const monthName = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${MESES[mo - 1]} ${y}`; };
+export const monthName = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${MONTHS[getLang()][mo - 1]} ${y}`; };
 
 // ── buscar ───────────────────────────────────────────────────
 export interface Filters { text?: string; groupId?: Id; person?: Id; cat?: string; from?: string; to?: string }
@@ -127,34 +127,34 @@ export function overdue(s: Snapshot, days = 15) {
 
 // ── gastos que se repiten ────────────────────────────────────
 export const REPEATS = [['', 'No se repite'], ['semanal', 'Cada semana'], ['quincenal', 'Cada quincena'], ['mensual', 'Cada mes'], ['anual', 'Cada año']] as const;
-export const repeatText = (r: string | null | undefined) => REPEATS.find(([k]) => k === (r ?? ''))?.[1] ?? 'No se repite';
+export const repeatText = (r: string | null | undefined) => tr(REPEATS.find(([k]) => k === (r ?? ''))?.[1] ?? 'No se repite');
 
 // ── cómo se dividió ──────────────────────────────────────────
 export function splitText(e: Expense, nm: (k: Id) => string) {
   const vals = e.splitParams.vals ?? {};
   const list = (suf = '') => Object.keys(vals).filter(k => vals[k]).map(k => `${nm(k)} ${vals[k]}${suf}`).join(', ');
   switch (e.splitMode) {
-    case 'equal': return `Partes iguales entre ${Object.keys(e.shares).length}`;
-    case 'percent': return `Por porcentaje: ${list(' %')}`;
-    case 'shares': return e.splitParams.unit === 'noches' ? `Por noches: ${list()}` : `Por partes: ${list()}`;
-    case 'items': return `Por lo que consumió cada quien${e.tax || e.tip ? `, con ${[e.tax && `ITBIS ${e.tax} %`, e.tip && `ley ${e.tip} %`].filter(Boolean).join(' y ')} repartidos en proporción` : ''}.`;
-    case 'adjust': return 'Partes iguales con extras';
-    default: return 'Montos exactos';
+    case 'equal': return tr("Partes iguales entre {0}", Object.keys(e.shares).length);
+    case 'percent': return tr("Por porcentaje: {0}", list(' %'));
+    case 'shares': return e.splitParams.unit === 'noches' ? tr("Por noches: {0}", list()) : tr("Por partes: {0}", list());
+    case 'items': return tr("Por lo que consumió cada quien{0}.", e.tax || e.tip ? tr(", con {0} repartidos en proporción", [e.tax && `ITBIS ${e.tax} %`, e.tip && tr("ley {0} %", e.tip)].filter(Boolean).join(' y ')) : '');
+    case 'adjust': return tr("Partes iguales con extras");
+    default: return tr("Montos exactos");
   }
 }
 
 // ── exportar ─────────────────────────────────────────────────
-const groupLabel = (s: Snapshot, g: Id) => { const x = groupOf(s, g); return x?.kind === 'directo' ? `Entre dos: ${x.members.map(m => short(s, m)).join(' y ')}` : x?.name ?? ''; };
+const groupLabel = (s: Snapshot, g: Id) => { const x = groupOf(s, g); return x?.kind === 'directo' ? tr("Entre dos: {0}", x.members.map(m => short(s, m)).join(' y ')) : x?.name ?? ''; };
 const csvCell = (v: string | number) => { const t = String(v); return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
 const plain = (c: number) => (c / 100).toFixed(2);
-const people = (s: Snapshot, o: Record<Id, number>, cur: string) => Object.entries(o).map(([k, v]) => `${s.profiles[k]?.name ?? 'Alguien'} ${moneyT(v, cur)}`).join('; ');
+const people = (s: Snapshot, o: Record<Id, number>, cur: string) => Object.entries(o).map(([k, v]) => `${s.profiles[k]?.name ?? tr("Alguien")} ${moneyT(v, cur)}`).join('; ');
 /** Los gastos (de un grupo o de todos) en CSV para Excel o Google Sheets. */
 export function exportCsv(s: Snapshot, groupId?: Id): string {
   const list = (groupId ? listOf(s, groupId) : live(s)).slice().sort((a, b) => a.date.localeCompare(b.date));
-  const head = ['Fecha', 'Grupo', 'Descripción', 'Categoría', 'Tipo', 'Monto', 'Moneda', 'Tasa', 'Monto RD$', 'Pagó', 'Partes', 'Tu parte RD$', 'Nota'];
+  const head = [tr("Fecha"), tr("Grupo"), tr("Descripción"), tr("Categoría"), tr("Tipo"), tr("Monto"), tr("Moneda"), tr("Tasa"), tr("Monto RD$"), tr("Pagó"), tr("Partes"), tr("Tu parte RD$"), tr("Nota")];
   const rows = list.map(e => {
     const b = toBase(e);
-    return [e.date, groupLabel(s, e.groupId), e.description, cat(e.category).name, e.isPayment ? 'Pago' : 'Gasto', plain(e.amount), e.currency,
+    return [e.date, groupLabel(s, e.groupId), e.description, cat(e.category).name, e.isPayment ? tr("Pago") : tr("Gasto"), plain(e.amount), e.currency,
       e.fxRate, plain(b.total), people(s, e.payers, e.currency), people(s, e.shares, e.currency), plain(b.shares[s.me] || 0), e.note ?? ''];
   });
   return '﻿' + [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n'); // con BOM: Excel lee bien las tildes
@@ -163,8 +163,8 @@ const esc = (t: string) => t.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt
 /** Un informe para imprimir o guardar en PDF: los gastos y quién le debe a quién. */
 export function exportHtml(s: Snapshot, groupId?: Id, debtsLines: string[] = []): string {
   const list = (groupId ? listOf(s, groupId) : live(s)).slice().sort((a, b) => a.date.localeCompare(b.date));
-  const title = groupId ? groupLabel(s, groupId) : 'Todas mis cuentas';
-  const rows = list.map(e => `<tr><td>${fdate(e.date)}</td><td>${esc(e.isPayment ? 'Pago' : e.description)}${groupId ? '' : `<br><small>${esc(groupLabel(s, e.groupId))}</small>`}</td>`
+  const title = groupId ? groupLabel(s, groupId) : tr("Todas mis cuentas");
+  const rows = list.map(e => `<tr><td>${fdate(e.date)}</td><td>${esc(e.isPayment ? tr("Pago") : e.description)}${groupId ? '' : `<br><small>${esc(groupLabel(s, e.groupId))}</small>`}</td>`
     + `<td>${esc(Object.keys(e.payers).map(k => short(s, k)).join(', '))}</td><td class="n">${esc(moneyT(toBase(e).total))}</td></tr>`).join('');
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)} · Saldao</title><style>
 body{font:14px/1.4 -apple-system,system-ui,sans-serif;color:#121318;margin:32px}h1{font-size:22px;margin:0 0 4px}p{color:#6c6e78;margin:0 0 20px}
@@ -180,7 +180,7 @@ export const exportName = (s: Snapshot, groupId?: Id) => `saldao-${fold(groupId 
 /** El texto del QR: tus datos de cobro y, si hay, el monto. Cualquier cámara lo lee. */
 export function payQrText(s: Snapshot, amount?: number) {
   const me = s.profiles[s.me];
-  return [`Pagar a ${me.name}`, me.payout, amount ? `Monto: ${moneyT(amount)}` : null, 'Saldao'].filter(Boolean).join('\n');
+  return [tr("Pagar a {0}", me.name), me.payout, amount ? tr("Monto: {0}", moneyT(amount)) : null, tr("Saldao")].filter(Boolean).join('\n');
 }
 /** El QR como un trazo SVG (cuadros de 1×1 en un lienzo de `size`): cada app lo dibuja con su SVG. */
 export function qrPath(text: string): { size: number; d: string } {

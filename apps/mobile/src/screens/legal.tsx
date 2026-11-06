@@ -9,6 +9,7 @@ import { SIZE, useC } from '../lib/theme';
 import { Btn, Card, Field, Label, LinkBtn, List, Main, Note, Row, Section, Sheet, SheetHead, SplitStatus } from '../ui/base';
 import { Icon, type IconName } from '../ui/icons';
 import { H1, H2, Txt } from '../ui/text';
+import { tr } from '@saldao/core';
 
 const open = (path: string) => () => WebBrowser.openBrowserAsync(`${APP.site}${path}`).catch(() => {});
 
@@ -17,8 +18,7 @@ export function LegalRow({ prefix }: { prefix: string }) {
   const c = useC();
   return (
     <Txt s={14} c="fg2">
-      {prefix} <Txt f="semi" s={14} color={c.accentInk} onPress={open(TERMS_URL)}>Términos de uso</Txt> y la{' '}
-      <Txt f="semi" s={14} color={c.accentInk} onPress={open(PRIVACY_URL)}>Política de privacidad</Txt>.
+      {prefix} <Txt f="semi" s={14} color={c.accentInk} onPress={open(TERMS_URL)}>{tr("Términos de uso")}</Txt>{" "}{tr("y la{0}", ' ')}<Txt f="semi" s={14} color={c.accentInk} onPress={open(PRIVACY_URL)}>{tr("Política de privacidad")}</Txt>.
     </Txt>
   );
 }
@@ -42,17 +42,17 @@ export function LegalGate() {
   };
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={[l.gate, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}>
-      <View><Image source={require('../../assets/splash-icon.png')} style={l.brand} accessibilityIgnoresInvertColors /><H1 s={34}>Antes de seguir</H1>
-        <Txt s={17} c="muted" style={{ marginTop: 8 }}>Lee y acepta cómo funciona {APP.name} y qué hacemos con tus datos.</Txt></View>
+      <View><Image source={require('../../assets/splash-icon.png')} style={l.brand} accessibilityIgnoresInvertColors /><H1 s={34}>{tr("Antes de seguir")}</H1>
+        <Txt s={17} c="muted" style={{ marginTop: 8 }}>{tr("Lee y acepta cómo funciona {0} y qué hacemos con tus datos.", APP.name)}</Txt></View>
       <Card style={{ padding: 22, gap: 14 }}>
-        <Bullet icon="users">Las personas de tus grupos ven tu nombre, los gastos que comparten y dónde te pagan. Tu correo, no.</Bullet>
-        <Bullet icon="swap">{`${APP.name} no mueve dinero: anota lo que pagan entre ustedes.`}</Bullet>
-        <Bullet icon="eyeOff">No vendemos tus datos ni mostramos anuncios.</Bullet>
-        <Bullet icon="trash">Puedes borrar tu cuenta cuando quieras desde Cuenta.</Bullet>
+        <Bullet icon="users">{tr("Las personas de tus grupos ven tu nombre, los gastos que comparten y dónde te pagan. Tu correo, no.")}</Bullet>
+        <Bullet icon="swap">{tr("{0} no mueve dinero: anota lo que pagan entre ustedes.", APP.name)}</Bullet>
+        <Bullet icon="eyeOff">{tr("No vendemos tus datos ni mostramos anuncios.")}</Bullet>
+        <Bullet icon="trash">{tr("Puedes borrar tu cuenta cuando quieras desde Cuenta.")}</Bullet>
       </Card>
-      <LegalRow prefix="Al seguir aceptas los" />
-      <Btn title={busy ? 'Un momento…' : 'Aceptar y seguir'} kind="primary" size="lg" disabled={busy} onPress={accept} />
-      <LinkBtn title="Salir" disabled={busy} style={{ alignSelf: 'center' }} onPress={() => run(b => b.signOut()).catch(() => {})} />
+      <LegalRow prefix={tr("Al seguir aceptas los")} />
+      <Btn title={busy ? tr("Un momento…") : tr("Aceptar y seguir")} kind="primary" size="lg" disabled={busy} onPress={accept} />
+      <LinkBtn title={tr("Salir")} disabled={busy} style={{ alignSelf: 'center' }} onPress={() => run(b => b.signOut()).catch(() => {})} />
       {msg ? <Txt f="medium" s={15} c="danger">{msg}</Txt> : null}
     </ScrollView>
   );
@@ -71,24 +71,24 @@ export function DeleteAccountSheet() {
     try { await getBackend()!.deleteAccount('BORRAR'); } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   return (
-    <Sheet head={<SheetHead title="Borrar mi cuenta" />}>
-      {(t.owed > 0 || t.owe > 0) ? <SplitStatus ok={false}>Tienes saldos abiertos: te deben {moneyT(t.owed)} y debes {moneyT(t.owe)}. Quedan anotados en los grupos.</SplitStatus> : null}
+    <Sheet head={<SheetHead title={tr("Borrar mi cuenta")} />}>
+      {(t.owed > 0 || t.owe > 0) ? <SplitStatus ok={false}>{tr("Tienes saldos abiertos: te deben {0} y debes {1}. Quedan anotados en los grupos.", moneyT(t.owed), moneyT(t.owe))}</SplitStatus> : null}
       <Section>
-        <H2>Se borra</H2>
-        <Bullet icon="out">Tu acceso: no podrás volver a entrar con este correo ni con tu usuario.</Bullet>
-        <Bullet icon="mail">Tu correo, tu usuario y dónde te pagan.</Bullet>
-        <Bullet icon="trash">Los grupos donde no queda nadie más con cuenta, con todos sus gastos.</Bullet>
+        <H2>{tr("Se borra")}</H2>
+        <Bullet icon="out">{tr("Tu acceso: no podrás volver a entrar con este correo ni con tu usuario.")}</Bullet>
+        <Bullet icon="mail">{tr("Tu correo, tu usuario y dónde te pagan.")}</Bullet>
+        <Bullet icon="trash">{tr("Los grupos donde no queda nadie más con cuenta, con todos sus gastos.")}</Bullet>
       </Section>
       <Section>
-        <H2>Se queda en los grupos</H2>
-        <Bullet icon="receipt">Los gastos, pagos y comentarios que compartiste, con tu nombre: también son las cuentas de las otras personas.</Bullet>
+        <H2>{tr("Se queda en los grupos")}</H2>
+        <Bullet icon="receipt">{tr("Los gastos, pagos y comentarios que compartiste, con tu nombre: también son las cuentas de las otras personas.")}</Bullet>
       </Section>
-      <Label title="Escribe BORRAR para confirmar">
-        <Field value={word} onChangeText={setWord} autoCapitalize="characters" autoCorrect={false} autoComplete="off" returnKeyType="done" accessibilityLabel="Escribe BORRAR para confirmar" />
+      <Label title={tr("Escribe BORRAR para confirmar")}>
+        <Field value={word} onChangeText={setWord} autoCapitalize="characters" autoCorrect={false} autoComplete="off" returnKeyType="done" accessibilityLabel={tr("Escribe BORRAR para confirmar")} />
       </Label>
       {err ? <Txt f="medium" s={15} c="danger">{err}</Txt> : null}
-      <Btn title={busy ? 'Borrando…' : 'Borrar mi cuenta para siempre'} icon="trash" kind="dangerSolid" size="lg" disabled={!ready || busy} onPress={del} />
-      <Note center>Esto no se puede deshacer.</Note>
+      <Btn title={busy ? tr("Borrando…") : tr("Borrar mi cuenta para siempre")} icon="trash" kind="dangerSolid" size="lg" disabled={!ready || busy} onPress={del} />
+      <Note center>{tr("Esto no se puede deshacer.")}</Note>
     </Sheet>
   );
 }
@@ -97,15 +97,15 @@ export function DeleteAccountSheet() {
 export function FailedSheet() {
   const { failed } = useSync();
   if (!failed.length) return (
-    <Sheet head={<SheetHead title="No se guardaron" left={<LinkBtn title="Listo" onPress={go.back} />} />}><Note>Ya no hay cambios pendientes.</Note></Sheet>
+    <Sheet head={<SheetHead title={tr("No se guardaron")} left={<LinkBtn title={tr("Listo")} onPress={go.back} />} />}><Note>{tr("Ya no hay cambios pendientes.")}</Note></Sheet>
   );
   return (
-    <Sheet head={<SheetHead title="No se guardaron" left={<LinkBtn title="Listo" onPress={go.back} />} />}>
-      <Note>La base no aceptó estos cambios, así que no cuentan en los saldos. Si todavía hacen falta, vuelve a hacerlos.</Note>
+    <Sheet head={<SheetHead title={tr("No se guardaron")} left={<LinkBtn title={tr("Listo")} onPress={go.back} />} />}>
+      <Note>{tr("La base no aceptó estos cambios, así que no cuentan en los saldos. Si todavía hacen falta, vuelve a hacerlos.")}</Note>
       <List>{failed.map(o => (
         <Row key={o.id}>
           <Main><Txt f="semi">{o.label}</Txt><Txt s={14} c="muted">{o.error}</Txt></Main>
-          <Btn title="Descartar" icon="trash" size="sm" onPress={() => discard(o.id)} />
+          <Btn title={tr("Descartar")} icon="trash" size="sm" onPress={() => discard(o.id)} />
         </Row>
       ))}</List>
     </Sheet>

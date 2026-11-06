@@ -9,6 +9,7 @@ import { R, useC } from '../lib/theme';
 import { Chip, LinkBtn } from './base';
 import { Icon, type IconName } from './icons';
 import { Txt } from './text';
+import { tr } from '@saldao/core';
 
 export type ChoiceGroup<T extends string> = { title?: string; options: [T, string][] };
 
@@ -16,9 +17,9 @@ function Bottom({ open, onClose, title, children }: { open: boolean; onClose: ()
   const c = useC(), insets = useSafeAreaInsets();
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={[ch.scrim, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityLabel="Cerrar" />
+      <Pressable style={[ch.scrim, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityLabel={tr("Cerrar")} />
       <View style={[ch.sheet, { backgroundColor: c.bg, paddingBottom: insets.bottom + 12 }]}>
-        <View style={ch.head}><Txt f="semi" s={17}>{title}</Txt><LinkBtn title="Listo" strong onPress={onClose} /></View>
+        <View style={ch.head}><Txt f="semi" s={17}>{title}</Txt><LinkBtn title={tr("Listo")} strong onPress={onClose} /></View>
         {children}
       </View>
     </Modal>
@@ -62,13 +63,13 @@ export function ChoiceChip<T extends string>({ icon, value, groups, onChange, ti
  * Una fecha con el calendario del teléfono (en Android su diálogo, en iPhone en una hoja). La del gasto nunca va en el
  * futuro; las de un grupo (de fecha a fecha) sí, pueden quedar vacías y la de fin no va antes de la de inicio.
  */
-export function DateChip({ value, onChange, title = 'Fecha', prefix, future, min, empty }: {
+export function DateChip({ value, onChange, title = tr("Fecha"), prefix, future, min, empty }: {
   value: string; onChange: (v: string) => void; title?: string; prefix?: string; future?: boolean; min?: string; empty?: string;
 }) {
   const c = useC();
   const [open, setOpen] = useState(false);
   const d = new Date(`${value || min || today()}T12:00:00`);
-  const label = `${prefix ? `${prefix} ` : ''}${!value ? empty ?? 'Elegir' : value === today() ? 'hoy' : fday(value)}`.replace(/^hoy/, 'Hoy');
+  const label = `${prefix ? `${prefix} ` : ''}${!value ? empty ?? tr("Elegir") : value === today() ? 'hoy' : fday(value)}`.replace(/^hoy/, 'Hoy');
   const pick = (x?: Date) => { if (x) { onChange(isoDay(x)); buzz(); } };
   const lim = { maximumDate: future ? undefined : new Date(), minimumDate: min ? new Date(`${min}T12:00:00`) : undefined };
   const press = () => {
@@ -84,16 +85,16 @@ export function DateChip({ value, onChange, title = 'Fecha', prefix, future, min
         <Bottom open={open} onClose={() => setOpen(false)} title={title}>
           <DateTimePicker value={d} mode="date" display="inline" {...lim} accentColor={c.accentInk} themeVariant={c.isDark ? 'dark' : 'light'}
             onChange={(_, x) => pick(x)} style={{ alignSelf: 'center' }} />
-          {empty && value ? <LinkBtn title="Quitar la fecha" style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
+          {empty && value ? <LinkBtn title={tr("Quitar la fecha")} style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
         </Bottom>
       )}
       {Platform.OS === 'web' && (
         <Bottom open={open} onClose={() => setOpen(false)} title={title}>
-          {empty && value ? <LinkBtn title="Quitar la fecha" style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
+          {empty && value ? <LinkBtn title={tr("Quitar la fecha")} style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 2 }}>
             {days.map(k => (
               <Pressable key={k} onPress={() => { onChange(k); setOpen(false); }} style={[ch.opt, k === value && { backgroundColor: c.accentSoft }]}>
-                <Txt color={k === value ? c.accentInk : c.fg}>{k === today() ? 'Hoy' : fday(k)}</Txt>
+                <Txt color={k === value ? c.accentInk : c.fg}>{k === today() ? tr("Hoy") : fday(k)}</Txt>
               </Pressable>
             ))}
           </ScrollView>

@@ -12,6 +12,7 @@ import { ANIM, SIZE, useC } from '../lib/theme';
 import { useUnread } from '../lib/unread';
 import { Icon, type IconName } from './icons';
 import { Txt } from './text';
+import { tr } from '@saldao/core';
 
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 const TABS: Record<string, [IconName, string]> = { index: ['home', 'Inicio'], grupos: ['users', 'Grupos'], actividad: ['bell', 'Actividad'], cuenta: ['user', 'Cuenta'] };
@@ -23,7 +24,7 @@ export function TabBar({ state, navigateToTab }: BottomTabBarProps) {
       <SyncPill />
       <View style={[t.bar, { backgroundColor: c.isDark ? 'rgba(23,24,30,0.96)' : 'rgba(255,255,255,0.96)', borderTopColor: c.line, paddingBottom: Math.max(8, insets.bottom - 6) }]}>
         {state.routes.map((r, i) => {
-          const [icon, label] = TABS[r.name] ?? ['home', r.name];
+          const [icon, es] = TABS[r.name] ?? ['home', r.name], label = tr(es);
           const on = state.index === i;
           return (
             <Pressable key={r.key} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label}
@@ -34,7 +35,7 @@ export function TabBar({ state, navigateToTab }: BottomTabBarProps) {
                 </View>
                 <Txt f="semi" s={12} lh={15} color={on ? c.fg : c.muted}>{label}</Txt>
                 {r.name === 'actividad' && unread.n > 0 && (
-                  <View style={[t.badge, { backgroundColor: c.danger, borderColor: c.surface }]} accessibilityLabel={`${unread.n} sin leer`}>
+                  <View style={[t.badge, { backgroundColor: c.danger, borderColor: c.surface }]} accessibilityLabel={tr("{0} sin leer", unread.n)}>
                     <Txt f="bold" s={10} lh={14} color={c.onDanger}>{unread.n > 99 ? '99+' : unread.n}</Txt>
                   </View>
                 )}
@@ -58,10 +59,10 @@ function SyncPill() {
     return () => clearTimeout(h);
   }, [want, urgent]);
   if (!show) return null;
-  const changes = plural(st.pending, 'cambio', 'cambios');
+  const changes = plural(st.pending, tr("cambio"), tr("cambios"));
   const bad = st.failed.length > 0;
-  const text = bad ? (st.failed.length === 1 ? 'Un cambio no se guardó' : `${st.failed.length} cambios no se guardaron`)
-    : st.offline ? (st.pending ? `Sin conexión · ${changes} por enviar` : 'Sin conexión · ves lo último guardado') : `Enviando ${changes}…`;
+  const text = bad ? (st.failed.length === 1 ? tr("Un cambio no se guardó") : tr("{0} cambios no se guardaron", st.failed.length))
+    : st.offline ? (st.pending ? tr("Sin conexión · {0} por enviar", changes) : tr("Sin conexión · ves lo último guardado")) : tr("Enviando {0}…", changes);
   const fg = bad ? c.danger : c.fg2, dot = bad ? c.danger : st.offline ? c.warn : c.accentInk;
   return (
     <Animated.View entering={ANIM ? FadeInDown.duration(260) : undefined} style={t.pillWrap} pointerEvents="box-none">
@@ -69,7 +70,7 @@ function SyncPill() {
         style={[t.pill, { backgroundColor: bad ? c.dangerSoft : c.surface2 }]}>
         <View style={[t.dot, { backgroundColor: dot }]} />
         <Txt f="semi" s={13} color={fg} lines={1} style={{ flexShrink: 1 }}>{text}</Txt>
-        {bad && <Txt f="bold" s={13} color={fg}>Ver</Txt>}
+        {bad && <Txt f="bold" s={13} color={fg}>{tr("Ver")}</Txt>}
       </Pressable>
     </Animated.View>
   );

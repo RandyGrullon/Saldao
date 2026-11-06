@@ -8,6 +8,7 @@ import { go } from '../lib/nav';
 import { ANIM, F, R, SIZE, useC } from '../lib/theme';
 import { Icon, type IconName } from './icons';
 import { H1, Txt } from './text';
+import { tr } from '@saldao/core';
 
 // ── movimiento: cada bloque sube 8 px y aparece, uno tras otro (28 ms) ──
 const rise = (i: number) => new Keyframe({ 0: { opacity: 0, transform: [{ translateY: 8 }] }, 100: { opacity: 1, transform: [{ translateY: 0 }] } })
@@ -40,8 +41,8 @@ export function Bar({ right }: { right?: ReactNode }) {
   const c = useC();
   return (
     <View style={st.bar}>
-      <Pressable onPress={go.back} hitSlop={6} style={st.back} accessibilityRole="button" accessibilityLabel="Atrás">
-        <Icon n="left" size={24} color={c.accentInk} /><Txt f="semi" c="accentInk">Atrás</Txt>
+      <Pressable onPress={go.back} hitSlop={6} style={st.back} accessibilityRole="button" accessibilityLabel={tr("Atrás")}>
+        <Icon n="left" size={24} color={c.accentInk} /><Txt f="semi" c="accentInk">{tr("Atrás")}</Txt>
       </Pressable>
       {right}
     </View>
@@ -66,7 +67,7 @@ export function StackScreen({ right, children, footer }: { right?: ReactNode; ch
 export function SheetHead({ title, left, right }: { title: string; left?: ReactNode | null; right?: ReactNode }) {
   return (
     <View style={st.sheetHead}>
-      <View style={st.side}>{left === undefined ? <LinkBtn title="Cancelar" onPress={go.back} /> : left}</View>
+      <View style={st.side}>{left === undefined ? <LinkBtn title={tr("Cancelar")} onPress={go.back} /> : left}</View>
       <Txt f="semi" s={17} lines={1} style={{ flexShrink: 1, textAlign: 'center' }}>{title}</Txt>
       <View style={[st.side, { alignItems: 'flex-end' }]}>{right}</View>
     </View>

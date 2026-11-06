@@ -13,6 +13,7 @@ import { Icon } from '../ui/icons';
 import { Av } from '../ui/kit';
 import { B, H2, Txt } from '../ui/text';
 import { useToast } from '../ui/toast';
+import { tr } from '@saldao/core';
 
 const KINDS: [GroupKind, string][] = [['casa', 'Casa'], ['viaje', 'Viaje'], ['pareja', 'Pareja'], ['otro', 'Otro']];
 
@@ -21,9 +22,9 @@ function Composer({ value, onChange, onAdd, label }: { value: string; onChange: 
   const c = useC();
   return (
     <View style={{ flexDirection: 'row', gap: 8 }}>
-      <TextInput value={value} onChangeText={onChange} placeholder="Nombre" placeholderTextColor={c.faint} returnKeyType="done" onSubmitEditing={onAdd} accessibilityLabel={label}
+      <TextInput value={value} onChangeText={onChange} placeholder={tr("Nombre")} placeholderTextColor={c.faint} returnKeyType="done" onSubmitEditing={onAdd} accessibilityLabel={label}
         autoCapitalize="words" style={[g.input, { borderColor: c.line, backgroundColor: c.surface, color: c.fg, fontFamily: F.regular }]} />
-      <Pressable onPress={onAdd} disabled={!value.trim()} accessibilityRole="button" accessibilityLabel="Agregar persona"
+      <Pressable onPress={onAdd} disabled={!value.trim()} accessibilityRole="button" accessibilityLabel={tr("Agregar persona")}
         style={[g.add, { backgroundColor: c.accent, opacity: value.trim() ? 1 : 0.45 }]}><Icon n="plus" color={c.accentFg} /></Pressable>
     </View>
   );
@@ -53,31 +54,31 @@ export function NewGroupSheet() {
         if (from || to) await b.updateGroup(id, { startsOn: from || null, endsOn: to || null });
       });
       buzz(); router.replace(`/grupo/${id}`);
-      toast('Grupo creado. Invita a los demás con el enlace.');
+      toast(tr("Grupo creado. Invita a los demás con el enlace."));
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   return (
-    <Sheet head={<SheetHead title="Nuevo grupo" right={<LinkBtn title="Crear" strong disabled={!name.trim() || busy || badDates} onPress={create} />} />}>
-      <Field placeholder="Nombre del grupo" value={name} onChangeText={setName} maxLength={60} returnKeyType="done" accessibilityLabel="Nombre del grupo" autoCapitalize="sentences" />
-      <SheetH3>Tipo</SheetH3>
-      <Seg label="Tipo de grupo" value={kind} onChange={setKind} options={KINDS} />
-      <SheetH3>Fechas (si es por un tiempo)</SheetH3>
+    <Sheet head={<SheetHead title={tr("Nuevo grupo")} right={<LinkBtn title={tr("Crear")} strong disabled={!name.trim() || busy || badDates} onPress={create} />} />}>
+      <Field placeholder={tr("Nombre del grupo")} value={name} onChangeText={setName} maxLength={60} returnKeyType="done" accessibilityLabel={tr("Nombre del grupo")} autoCapitalize="sentences" />
+      <SheetH3>{tr("Tipo")}</SheetH3>
+      <Seg label={tr("Tipo de grupo")} value={kind} onChange={setKind} options={KINDS.map(([k, l]) => [k, tr(l)] as [GroupKind, string])} />
+      <SheetH3>{tr("Fechas (si es por un tiempo)")}</SheetH3>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <DateChip title="Desde" prefix="Desde" value={from} onChange={v => { setFrom(v); if (to && v && v > to) setTo(''); }} future empty="Desde…" />
-        <DateChip title="Hasta" prefix="Hasta" value={to} onChange={setTo} future min={from || undefined} empty="Hasta…" />
+        <DateChip title={tr("Desde")} prefix={tr("Desde")} value={from} onChange={v => { setFrom(v); if (to && v && v > to) setTo(''); }} future empty={tr("Desde…")} />
+        <DateChip title={tr("Hasta")} prefix={tr("Hasta")} value={to} onChange={setTo} future min={from || undefined} empty={tr("Hasta…")} />
       </View>
-      {badDates ? <Txt f="medium" s={15} c="danger">La fecha final va después de la primera.</Txt>
-        : <Note>Un viaje o un evento: al llegar la última fecha, {APP.name} avisa que toca saldar y archivar.</Note>}
-      {known.length > 0 && <SheetH3>Personas de tus otros grupos</SheetH3>}
+      {badDates ? <Txt f="medium" s={15} c="danger">{tr("La fecha final va después de la primera.")}</Txt>
+        : <Note>{tr("Un viaje o un evento: al llegar la última fecha, {0} avisa que toca saldar y archivar.", APP.name)}</Note>}
+      {known.length > 0 && <SheetH3>{tr("Personas de tus otros grupos")}</SheetH3>}
       {known.length > 0 && <Chips>{known.map(p => (
         <Chip key={p} title={short(s, p)} on={picked.includes(p)} left={<Av id={p} size="xs" />}
           onPress={() => { buzz(); setPicked(x => (x.includes(p) ? x.filter(y => y !== p) : [...x, p])); }} />))}</Chips>}
-      <SheetH3>Alguien que todavía no usa {APP.name}</SheetH3>
-      <Composer value={draft} onChange={setDraft} onAdd={addDraft} label="Nombre de la persona" />
-      {newPeople.length > 0 && <Chips>{newPeople.map((n, i) => <Chip key={i} title={`${n} ×`} label={`Quitar a ${n}`} onPress={() => setNewPeople(p => p.filter((_, j) => j !== i))} />)}</Chips>}
-      <Note>Puedes cargarle gastos desde ya. Cuando entre con el enlace de invitación, reclama su lugar y ve todo su historial.</Note>
+      <SheetH3>{tr("Alguien que todavía no usa {0}", APP.name)}</SheetH3>
+      <Composer value={draft} onChange={setDraft} onAdd={addDraft} label={tr("Nombre de la persona")} />
+      {newPeople.length > 0 && <Chips>{newPeople.map((n, i) => <Chip key={i} title={`${n} ×`} label={tr("Quitar a {0}", n)} onPress={() => setNewPeople(p => p.filter((_, j) => j !== i))} />)}</Chips>}
+      <Note>{tr("Puedes cargarle gastos desde ya. Cuando entre con el enlace de invitación, reclama su lugar y ve todo su historial.")}</Note>
       {err ? <Txt f="medium" s={15} c="danger">{err}</Txt> : null}
-      <Btn title={busy ? 'Creando…' : 'Crear grupo'} kind="primary" size="lg" disabled={!name.trim() || busy || badDates} onPress={create} />
+      <Btn title={busy ? tr("Creando…") : tr("Crear grupo")} kind="primary" size="lg" disabled={!name.trim() || busy || badDates} onPress={create} />
     </Sheet>
   );
 }
@@ -86,30 +87,30 @@ export function InviteSheet() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const s = useS(), toast = useToast(), grp = groupOf(s, groupId);
   const [draft, setDraft] = useState('');
-  if (!grp) return <Sheet head={<SheetHead title="Invitar" />}><Finding>Este grupo ya no existe.</Finding></Sheet>;
+  if (!grp) return <Sheet head={<SheetHead title={tr("Invitar")} />}><Finding>{tr("Este grupo ya no existe.")}</Finding></Sheet>;
   const link = inviteLink(APP.site, grp.inviteToken);
   const others = friends(s).filter(p => !grp.members.includes(p) && !s.profiles[p].deletedAt);
-  const share = () => Share.share({ message: `Únete a «${grp.name}» en ${APP.name} para llevar las cuentas claras: ${link}` }).catch(() => {});
+  const share = () => Share.share({ message: tr("Únete a «{0}» en {1} para llevar las cuentas claras: {2}", grp.name, APP.name, link) }).catch(() => {});
   const add = async (fn: () => Promise<unknown>, text: string) => {
     try { await run(() => fn().then(() => undefined)); buzz(); toast(text); } catch (e) { toast(errMsg(e)); }
   };
   const addNew = () => { const n = draft.trim(); if (!n) return; setDraft(''); add(() => getBackend()!.addPlaceholder(grp.id, n), `${n} agregado. Mándale el enlace para que reclame su lugar.`); };
   return (
-    <Sheet head={<SheetHead title="Invitar" left={<LinkBtn title="Listo" onPress={go.back} />} />}>
+    <Sheet head={<SheetHead title={tr("Invitar")} left={<LinkBtn title={tr("Listo")} onPress={go.back} />} />}>
       <Section>
-        <H2>Enlace de {grp.name}</H2>
+        <H2>{tr("Enlace de {0}", grp.name)}</H2>
         <Txt s={15} c="muted" selectable>{link}</Txt>
         <Actions>
-          <Btn title="Compartir" icon="share" kind="primary" style={A.half} onPress={share} />
-          <Btn title="Copiar" icon="link" style={A.half} onPress={() => Clipboard.setStringAsync(link).then(() => toast('Enlace copiado'), () => toast('No se pudo copiar'))} />
+          <Btn title={tr("Compartir")} icon="share" kind="primary" style={A.half} onPress={share} />
+          <Btn title={tr("Copiar")} icon="link" style={A.half} onPress={() => Clipboard.setStringAsync(link).then(() => toast(tr("Enlace copiado")), () => toast(tr("No se pudo copiar")))} />
         </Actions>
       </Section>
-      {others.length > 0 && <SheetH3>Agregar de tus otros grupos</SheetH3>}
+      {others.length > 0 && <SheetH3>{tr("Agregar de tus otros grupos")}</SheetH3>}
       {others.length > 0 && <Chips>{others.map(p => (
         <Chip key={p} title={short(s, p)} left={<Av id={p} size="xs" />} right={<Icon n="plus" sm />}
           onPress={() => add(() => getBackend()!.addMember(grp.id, p), `${short(s, p)} ya está en ${grp.name}`)} />))}</Chips>}
-      <SheetH3>Alguien que todavía no usa {APP.name}</SheetH3>
-      <Composer value={draft} onChange={setDraft} onAdd={addNew} label="Nombre de la persona" />
+      <SheetH3>{tr("Alguien que todavía no usa {0}", APP.name)}</SheetH3>
+      <Composer value={draft} onChange={setDraft} onAdd={addNew} label={tr("Nombre de la persona")} />
     </Sheet>
   );
 }
@@ -128,21 +129,21 @@ export function JoinSheet() {
       let id = '';
       await run(async b => { id = await b.joinGroup(token, as); });
       clearInvite(); buzz(); router.replace(`/grupo/${id}`);
-      toast(`Ya estás en ${p!.name}`);
+      toast(tr("Ya estás en {0}", p!.name));
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   return (
-    <Sheet head={<SheetHead title="Invitación" left={<LinkBtn title="Ahora no" onPress={() => { clearInvite(); go.back(); }} />} />}>
-      {p === undefined ? <Note center>Buscando el grupo…</Note>
-        : p === null ? <Finding>Esta invitación no es válida o ya expiró. Pide un enlace nuevo.</Finding> : <>
-          <Finding>Te invitaron a <B>{p.name}</B> ({p.members} {p.members === 1 ? 'persona' : 'personas'}).</Finding>
+    <Sheet head={<SheetHead title={tr("Invitación")} left={<LinkBtn title={tr("Ahora no")} onPress={() => { clearInvite(); go.back(); }} />} />}>
+      {p === undefined ? <Note center>{tr("Buscando el grupo…")}</Note>
+        : p === null ? <Finding>{tr("Esta invitación no es válida o ya expiró. Pide un enlace nuevo.")}</Finding> : <>
+          <Finding>{tr("Te invitaron a")}{" "}<B>{p.name}</B> ({p.members} {p.members === 1 ? tr("persona") : tr("personas")}).</Finding>
           {p.placeholders.length > 0 && <>
-            <SheetH3>¿Ya te habían agregado con otro nombre?</SheetH3>
-            <Note>Elige tu nombre y todo lo que te cargaron pasa a tu cuenta.</Note>
+            <SheetH3>{tr("¿Ya te habían agregado con otro nombre?")}</SheetH3>
+            <Note>{tr("Elige tu nombre y todo lo que te cargaron pasa a tu cuenta.")}</Note>
             <Chips>{p.placeholders.map(x => <Chip key={x.id} title={x.name} on={as === x.id} onPress={() => setAs(a => (a === x.id ? null : x.id))} />)}</Chips>
           </>}
           {err ? <Txt f="medium" s={15} c="danger">{err}</Txt> : null}
-          <Btn title={busy ? 'Uniéndote…' : as ? `Unirme como ${p.placeholders.find(x => x.id === as)?.name}` : 'Unirme al grupo'} kind="primary" size="lg" disabled={busy} onPress={join} />
+          <Btn title={busy ? tr("Uniéndote…") : as ? tr("Unirme como {0}", p.placeholders.find(x => x.id === as)?.name) : tr("Unirme al grupo")} kind="primary" size="lg" disabled={busy} onPress={join} />
         </>}
     </Sheet>
   );

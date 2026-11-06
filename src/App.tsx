@@ -15,6 +15,7 @@ import { NavShell, useNav, type Nav, type Tab } from './ui/nav';
 import { SyncPill } from './ui/sync';
 import { ListScreen, SearchScreen, SummaryScreen } from './screens/more';
 import { lockOn, unlock } from './lib/lock';
+import { tr } from '@saldao/core';
 
 /** La bienvenida de index.html se va cuando hay algo que mostrar (y a más tardar a los 4 s). */
 function hideSplash() {
@@ -59,12 +60,12 @@ export function App() {
   if (phase === 'login') return <AuthScreen />;
   if (phase === 'setup') return (
     <main className="gate"><h1>{APP.name}</h1>
-      <p className="lead">Falta conectar Supabase: copia <code>.env.example</code> como <code>.env.local</code> con la URL y la anon key de tu proyecto, y vuelve a arrancar.</p>
-      <p className="note">Para verla sin backend: <code>npm run dev:demo</code>.</p></main>);
+      <p className="lead">{tr("Falta conectar Supabase: copia")}{" "}<code>{tr(".env.example")}</code>{" "}{tr("como")}{" "}<code>{tr(".env.local")}</code>{" "}{tr("con la URL y la anon key de tu proyecto, y vuelve a arrancar.")}</p>
+      <p className="note">{tr("Para verla sin backend:")}{" "}<code>{tr("npm run dev:demo")}</code>.</p></main>);
   if (phase === 'error') return (
-    <main className="gate"><h1>No pudimos cargar tus cuentas</h1><p className="lead">{err}</p>
-      <button className="btn primary block tap" onClick={() => location.reload()}>Intentar de nuevo</button>
-      <button className="btn danger block tap" onClick={() => sb().auth.signOut()}>Cerrar sesión</button></main>);
+    <main className="gate"><h1>{tr("No pudimos cargar tus cuentas")}</h1><p className="lead">{err}</p>
+      <button className="btn primary block tap" onClick={() => location.reload()}>{tr("Intentar de nuevo")}</button>
+      <button className="btn danger block tap" onClick={() => sb().auth.signOut()}>{tr("Cerrar sesión")}</button></main>);
   return <HomeSkeleton />;
 }
 
@@ -96,8 +97,8 @@ function Ready() {
       renderRoute={r => r.kind === 'group' ? <GroupScreen id={r.id} /> : r.kind === 'person' ? <PersonScreen id={r.id} /> : r.kind === 'list' ? <ListScreen groupId={r.id} />
         : r.kind === 'summary' ? <SummaryScreen /> : r.kind === 'search' ? <SearchScreen /> : <ExpenseScreen id={r.id} />}
       tabbar={nav => <><SyncPill /><Tabbar nav={nav} unread={unread.n} /></>}>
-      {token && <OpenOnce node={<JoinSheet token={token} />} label="Invitación" />}
-      {busy && <div className="top-loader" role="progressbar" aria-label="Guardando" />}
+      {token && <OpenOnce node={<JoinSheet token={token} />} label={tr("Invitación")} />}
+      {busy && <div className="top-loader" role="progressbar" aria-label={tr("Guardando")} />}
     </NavShell>
   );
 }
@@ -105,12 +106,12 @@ function Ready() {
 /** Bloqueada: la huella, la cara o el PIN del aparato para seguir. */
 function LockScreen({ onOpen }: { onOpen: () => void }) {
   const [msg, setMsg] = useState('');
-  const go = async () => { setMsg(''); if (await unlock()) onOpen(); else setMsg('No se pudo comprobar. Intenta de nuevo.'); };
+  const go = async () => { setMsg(''); if (await unlock()) onOpen(); else setMsg(tr("No se pudo comprobar. Intenta de nuevo.")); };
   return (
     <main className="gate">
-      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{APP.name} está bloqueado</h1>
-        <p className="lead">Usa la huella, la cara o el PIN de este aparato para ver tus cuentas.</p></div>
-      <button className="btn primary block tap" onClick={go}><Icon n="eye" />Desbloquear</button>
+      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{tr("{0} está bloqueado", APP.name)}</h1>
+        <p className="lead">{tr("Usa la huella, la cara o el PIN de este aparato para ver tus cuentas.")}</p></div>
+      <button className="btn primary block tap" onClick={go}><Icon n="eye" />{tr("Desbloquear")}</button>
       {msg && <p className="err" role="alert">{msg}</p>}
     </main>
   );
@@ -127,11 +128,11 @@ function OpenOnce({ node, label }: { node: React.ReactNode; label: string }) {
 const TABS: [Tab, IconName, string][] = [['home', 'home', 'Inicio'], ['groups', 'users', 'Grupos'], ['activity', 'bell', 'Actividad'], ['account', 'user', 'Cuenta']];
 function Tabbar({ nav, unread }: { nav: Nav; unread: number }) {
   return (
-    <nav className="tabbar" aria-label="Secciones">
+    <nav className="tabbar" aria-label={tr("Secciones")}>
       {TABS.map(([t, icon, label]) => (
         <button key={t} className="tab" aria-current={nav.tab === t ? 'page' : undefined} onClick={() => nav.setTab(t)}>
-          <span className="pip"><Icon n={icon} /></span><span>{label}</span>
-          {t === 'activity' && unread > 0 && <span className="badge" aria-label={`${unread} sin leer`}>{unread > 99 ? '99+' : unread}</span>}
+          <span className="pip"><Icon n={icon} /></span><span>{tr(label)}</span>
+          {t === 'activity' && unread > 0 && <span className="badge" aria-label={tr("{0} sin leer", unread)}>{unread > 99 ? '99+' : unread}</span>}
         </button>
       ))}
     </nav>

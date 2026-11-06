@@ -14,6 +14,7 @@ import { Card, End, Main, Pill, Row, Sub, st } from './base';
 import { Icon, type IconName } from './icons';
 import { B, Txt } from './text';
 import { useToast } from './toast';
+import { tr } from '@saldao/core';
 
 /** Ejecuta una acción, avisa y ofrece deshacer cuando se puede. */
 export function useAct() {
@@ -111,7 +112,7 @@ export function HomeSkeleton() {
   const pulse = useAnimatedStyle(() => ({ opacity: o.value }));
   const box = (w: number | `${number}%`, h: number, r = 8, extra?: object) => <View style={[{ width: w, height: h, borderRadius: r, backgroundColor: c.surface2 }, extra]} />;
   return (
-    <Animated.View accessibilityLabel="Cargando" style={[{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 20, paddingHorizontal: SIZE.gut, gap: 14 }, pulse]}>
+    <Animated.View accessibilityLabel={tr("Cargando")} style={[{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 20, paddingHorizontal: SIZE.gut, gap: 14 }, pulse]}>
       {box(120, 14)}{box(200, 30, 8, { marginBottom: 6 })}{box('100%', 250, 22)}{box(110, 18, 8, { marginTop: 14 })}
       <Card>{[0, 1, 2, 3].map(i => (
         <View key={i} style={[st.row, { gap: 14 }]}>{box(40, 40, 12)}
@@ -125,7 +126,7 @@ export function BalText({ c: x, who }: { c: number; who?: boolean }) {
   const color = useBalColor()(x);
   return (
     <End>
-      <Txt s={13} c="muted">{x > 0 ? (who ? 'te debe' : 'te deben') : x < 0 ? (who ? 'le debes' : 'debes') : 'a mano'}</Txt>
+      <Txt s={13} c="muted">{x > 0 ? (who ? tr("te debe") : tr("te deben")) : x < 0 ? (who ? tr("le debes") : tr("debes")) : tr("a mano")}</Txt>
       {x !== 0 && <Money c={Math.abs(x)} sign={x > 0} s={17} color={color} />}
     </End>
   );
@@ -134,9 +135,9 @@ export function BalText({ c: x, who }: { c: number; who?: boolean }) {
 /** «Le pagaste a Ana», «Ana te pagó», «Ana le pagó a Beto» (dentro de un texto). */
 export function PayText({ s, e }: { s: Snapshot; e: Expense }) {
   const from = Object.keys(e.payers)[0], to = Object.keys(e.shares)[0];
-  if (from === s.me) return <>Le pagaste a <B>{short(s, to)}</B></>;
-  if (to === s.me) return <><B>{short(s, from)}</B> te pagó</>;
-  return <><B>{short(s, from)}</B> le pagó a <B>{short(s, to)}</B></>;
+  if (from === s.me) return <>{tr("Le pagaste a")}{" "}<B>{short(s, to)}</B></>;
+  if (to === s.me) return <><B>{short(s, from)}</B>{" "}{tr("te pagó")}</>;
+  return <><B>{short(s, from)}</B>{" "}{tr("le pagó a")}{" "}<B>{short(s, to)}</B></>;
 }
 
 /** Cuánto mueve este gasto tu saldo. */
@@ -145,18 +146,18 @@ export function Impact({ e }: { e: Expense }) {
   const line = (lbl: string, x?: number, color?: string, sign?: boolean) => (
     <End><Txt s={13} c="muted">{lbl}</Txt>{x !== undefined && <Money c={x} sign={sign} s={17} color={color} />}</End>
   );
-  if (e.isPayment) return m > 0 ? line('pagaste', m, c.ok) : m < 0 ? line('recibiste', -m) : line('no participas');
+  if (e.isPayment) return m > 0 ? line('pagaste', m, c.ok) : m < 0 ? line('recibiste', -m) : line(tr("no participas"));
   if (m > 0) return line('prestaste', m, c.ok, true);
-  if (m < 0) return line('te prestaron', -m, c.danger);
-  return line(involves(e, s.me) ? 'pagaste lo tuyo' : 'no participas');
+  if (m < 0) return line(tr("te prestaron"), -m, c.danger);
+  return line(involves(e, s.me) ? tr("pagaste lo tuyo") : tr("no participas"));
 }
 
 /** ¿Ya se saldó este movimiento? */
 export function ItemStatus({ it }: { it: LedgerItem }) {
-  if (!it.left) return <Pill tone="ok">{it.e.isPayment ? 'aplicado' : 'saldado'}{it.closedAt ? ` ${fdate(it.closedAt)}` : ''}</Pill>;
-  if (it.e.isPayment) return <Pill>{it.covers.length ? `sobran ${moneyT(it.left)}` : 'a favor'}</Pill>;
-  if (it.left < Math.abs(it.x)) return <Pill tone="warn">quedan {moneyT(it.left)}</Pill>;
-  return <Pill tone="warn">pendiente</Pill>;
+  if (!it.left) return <Pill tone="ok">{it.e.isPayment ? tr("aplicado") : tr("saldado")}{it.closedAt ? ` ${fdate(it.closedAt)}` : ''}</Pill>;
+  if (it.e.isPayment) return <Pill>{it.covers.length ? tr("sobran {0}", moneyT(it.left)) : tr("a favor")}</Pill>;
+  if (it.left < Math.abs(it.x)) return <Pill tone="warn">{tr("quedan {0}", moneyT(it.left))}</Pill>;
+  return <Pill tone="warn">{tr("pendiente")}</Pill>;
 }
 
 /** Un renglón del porqué, visto desde a: + suma a lo que b le debe a a. */
@@ -164,10 +165,10 @@ export function WhyRow({ it, a, b, showGroup, bg }: { it: LedgerItem & { groupId
   const s = useS(), e = it.e, debtor = it.x > 0 ? b : a, share = e.shares[debtor] || 0;
   const g = showGroup && it.groupId ? groupOf(s, it.groupId) : null;
   const sub = e.isPayment
-    ? (it.covers.length ? `Cubrió ${it.covers.map(x => `«${x.description}»`).join(', ')}${it.left ? ` y sobraron ${moneyT(it.left)}` : ''}` : 'Quedó como saldo a favor')
-    : `${paidText(s, e)} · ${debtor === s.me ? 'tu parte' : `parte de ${short(s, debtor)}`} ${moneyT(share, e.currency)}${g && g.kind !== 'directo' ? ` · ${g.name}` : ''}`;
+    ? (it.covers.length ? tr("Cubrió {0}{1}", it.covers.map(x => `«${x.description}»`).join(', '), it.left ? tr(" y sobraron {0}", moneyT(it.left)) : '') : tr("Quedó como saldo a favor"))
+    : `${paidText(s, e)} · ${debtor === s.me ? tr("tu parte") : tr("parte de {0}", short(s, debtor))} ${moneyT(share, e.currency)}${g && g.kind !== 'directo' ? ` · ${g.name}` : ''}`;
   const closed = it.closedBy && !it.left && !e.isPayment
-    ? ` · se saldó con ${it.closedBy.isPayment ? `el pago del ${fdate(it.closedBy.date)}` : `«${it.closedBy.description}»`}` : '';
+    ? tr(" · se saldó con {0}", it.closedBy.isPayment ? tr("el pago del {0}", fdate(it.closedBy.date)) : `«${it.closedBy.description}»`) : '';
   return (
     <Row onPress={() => go.expense(e.id)} style={{ alignItems: 'flex-start', padding: 12, paddingLeft: 12, paddingRight: 12, minHeight: 0, gap: 12 }}>
       <LeadDate date={e.date} bg={bg} />
@@ -190,13 +191,13 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
       <Main>
         <Txt f="semi" lines={1}>{e.isPayment ? <PayText s={s} e={e} /> : e.description}</Txt>
         <Sub>
-          {e.pending && <Pill>sin enviar</Pill>}
+          {e.pending && <Pill>{tr("sin enviar")}</Pill>}
           {e.isPayment ? <>
             <Txt s={14} c="muted">{moneyT(e.amount, e.currency)} · {fdate(e.date)}</Txt>
-            {e.paymentStatus === 'pendiente' && <Pill tone="warn">por confirmar</Pill>}
+            {e.paymentStatus === 'pendiente' && <Pill tone="warn">{tr("por confirmar")}</Pill>}
           </> : <>
             <Txt s={14} c="muted">{paidText(s, e)} · {fdate(e.date)}{showGroup && g && g.kind !== 'directo' ? ` · ${g.name}` : ''}</Txt>
-            {status && <Pill tone={status.done === status.total ? 'ok' : undefined}>{status.done === status.total ? 'saldado' : `${status.done} de ${status.total} saldados`}</Pill>}
+            {status && <Pill tone={status.done === status.total ? 'ok' : undefined}>{status.done === status.total ? tr("saldado") : tr("{0} de {1} saldados", status.done, status.total)}</Pill>}
           </>}
         </Sub>
       </Main>
@@ -204,12 +205,12 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
     </Row>
   );
   if (!canEdit(s, e)) return row;
-  const del = () => act(b => b.deleteExpense(e.id), e.isPayment ? 'Pago eliminado' : 'Gasto eliminado', b => b.restoreExpense(e.id));
+  const del = () => act(b => b.deleteExpense(e.id), e.isPayment ? tr("Pago eliminado") : tr("Gasto eliminado"), b => b.restoreExpense(e.id));
   return (
     <ReanimatedSwipeable friction={2} rightThreshold={48} overshootRight={false}
       renderRightActions={() => (
-        <Pressable onPress={del} accessibilityRole="button" accessibilityLabel={`Eliminar ${e.description}`} style={[k.swipeAct, { backgroundColor: c.danger }]}>
-          <Icon n="trash" color={c.onDanger} /><Txt f="semi" s={12} color={c.onDanger}>Eliminar</Txt>
+        <Pressable onPress={del} accessibilityRole="button" accessibilityLabel={tr("Eliminar {0}", e.description)} style={[k.swipeAct, { backgroundColor: c.danger }]}>
+          <Icon n="trash" color={c.onDanger} /><Txt f="semi" s={12} color={c.onDanger}>{tr("Eliminar")}</Txt>
         </Pressable>
       )}>
       {row}
