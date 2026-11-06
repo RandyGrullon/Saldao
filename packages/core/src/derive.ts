@@ -1,11 +1,13 @@
-import { involves, ledger, nets, pairTransfers, pairVal, toBase, type Expense, type Id, type LedgerItem } from './domain';
+import { involves, ledger, nets, pairTransfers, pairVal, simplify, toBase, type Expense, type Id, type LedgerItem } from './domain';
 import { fdate, moneyT, today } from './format';
 import type { Backend, Snapshot } from './types';
 
 export const live = (s: Snapshot) => s.expenses.filter(e => !e.deletedAt);
 export const listOf = (s: Snapshot, g: Id) => live(s).filter(e => e.groupId === g);
 export const groupOf = (s: Snapshot, id: Id) => s.groups.find(g => g.id === id);
-export const visibleGroups = (s: Snapshot) => s.groups.filter(g => g.kind !== 'directo');
+/** Los grupos de la lista (sin los «entre dos» ni los archivados; sus saldos igual cuentan). */
+export const visibleGroups = (s: Snapshot) => s.groups.filter(g => g.kind !== 'directo' && !g.archivedAt);
+export const archivedGroups = (s: Snapshot) => s.groups.filter(g => g.kind !== 'directo' && !!g.archivedAt);
 export const byNewest = (a: Expense, b: Expense) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
 
 const friendsCache = new WeakMap<Snapshot, Id[]>();
@@ -13,7 +15,8 @@ const friendsCache = new WeakMap<Snapshot, Id[]>();
 export function friends(s: Snapshot): Id[] {
   let f = friendsCache.get(s);
   if (!f) {
-    f = [...new Set(s.groups.flatMap(g => g.members))].filter(id => id !== s.me && s.profiles[id])
+    // el fondo común no es una persona
+    f = [...new Set(s.groups.flatMap(g => g.members))].filter(id => id !== s.me && s.profiles[id] && !s.profiles[id].fundOf)
       .sort((a, b) => s.profiles[a].name.localeCompare(s.profiles[b].name));
     friendsCache.set(s, f);
   }
@@ -31,7 +34,8 @@ export const short = (s: Snapshot, id: Id) => id === s.me ? 'Tú' : (s.profiles[
 export const fullName = (s: Snapshot, id: Id) => id === s.me ? 'Tú' : (s.profiles[id]?.name ?? 'Alguien');
 export const initials = (s: Snapshot, id: Id) => (s.profiles[id]?.name ?? '?').split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 
-export const debts = (s: Snapshot, g: Id) => pairTransfers(listOf(s, g));
+/** Quién le debe a quién en el grupo: de a pares, o con «simplificar deudas», el menor número de pagos. */
+export const debts = (s: Snapshot, g: Id) => (groupOf(s, g)?.simplify ? simplify(nets(listOf(s, g))) : pairTransfers(listOf(s, g)));
 export const allDebts = (s: Snapshot) => s.groups.flatMap(g => debts(s, g.id).map(t => ({ ...t, groupId: g.id })));
 export const sharedGroups = (s: Snapshot, a: Id, b: Id) => s.groups.filter(g => g.members.includes(a) && g.members.includes(b)).map(g => g.id);
 

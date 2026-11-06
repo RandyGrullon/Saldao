@@ -12,8 +12,9 @@ function memory() {
 
 function fakeServer() {
   const db: Snapshot = {
-    me: 'me', profiles: {}, expenses: [], comments: [], activity: [], legalOk: true,
-    groups: [{ id: 'g', name: 'Casa', kind: 'casa', currency: 'DOP', inviteToken: 't', createdAt: '2026-11-01', members: ['me', 'ana'], roles: {} }],
+    me: 'me', profiles: {}, expenses: [], comments: [], activity: [], items: [], legalOk: true,
+    groups: [{ id: 'g', name: 'Casa', kind: 'casa', currency: 'DOP', inviteToken: 't', createdAt: '2026-11-01', members: ['me', 'ana'], roles: {},
+      budget: null, simplify: false, archivedAt: null, photoPath: null, startsOn: null, endsOn: null }],
   };
   const f = { db, online: true, reject: null as string | null, loseReply: false, seen: new Set<string>(), sent: [] as Op[] };
   const unused = async (): Promise<never> => { throw new Error('no se usa en estas pruebas'); };
@@ -39,6 +40,9 @@ function fakeServer() {
     createGroup: unused, addPlaceholder: unused, addMember: unused, directGroup: unused, invitePreview: unused, joinGroup: unused,
     updateProfile: unused, acceptLegal: unused, deleteAccount: unused,
     signOut: async () => {},
+    catchUpRecurring: async () => 0,
+    updateGroup: unused, setMemberRole: unused, removeMember: unused, renamePlaceholder: unused, leaveGroup: unused, createFund: unused, addItem: unused, toggleItem: unused, deleteItem: unused,
+    uploadPhoto: unused, photoUrl: unused, setExpensePhoto: unused, savePushToken: unused, deletePushToken: unused, scanReceipt: unused,
   };
   return Object.assign(f, { server });
 }

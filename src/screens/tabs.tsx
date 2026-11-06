@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { ago, APP, canEdit, fdate, friendBal, friends, groupBal, groupOf, hueOf, moneyT, myTotals, pendingInfo, plural, PRIVACY_URL, run, short, TERMS_URL, typedUser, USERNAME, USERNAME_RULE, visibleGroups, type Activity, type Group, type Snapshot } from '@saldao/core';
-import { Icon, type IconName } from '../ui/icons';
+import { ago, APP, archivedGroups, groupDates, groupEnded, canEdit, exportCsv, exportHtml, exportName, fdate, monthName, monthStats, overdue, thisMonth, friendBal, friends, groupBal, groupOf, hueOf, moneyT, myTotals, pendingInfo, plural, PRIVACY_URL, run, short, TERMS_URL, typedUser, USERNAME, USERNAME_RULE, visibleGroups, type Activity, type Group, type Snapshot } from '@saldao/core';
+import { Icon } from '../ui/icons';
 import { AnimMoney, Av, BalText, Empty, RowIc, Impact, Money, errMsg, payText, useAct, useS } from '../ui/kit';
 import { buzz, useNav } from '../ui/nav';
 import { MySettleSheet } from '../sheets/settle';
@@ -9,16 +9,21 @@ import { NewGroupSheet } from '../sheets/groups';
 import { AddExpenseSheet } from '../sheets/AddExpense';
 import { loadTheme, saveTheme, type ThemeMode } from '../lib/theme';
 import { DeleteAccountSheet } from './legal';
+import { remind } from '../sheets/settle';
+import { QrSheet } from '../sheets/qr';
+import { download, printReport } from '../sheets/group-settings';
+import { GroupPhoto } from '../ui/photo';
+import { disablePush, enablePush, pushOn, pushSupported } from '../lib/push';
+import { disableLock, enableLock, lockOn, lockSupported } from '../lib/lock';
 
 const KIND: Record<string, string> = { casa: 'Casa', viaje: 'Viaje', pareja: 'Pareja', otro: 'Grupo', directo: 'Entre dos' };
-const KIND_IC: Record<string, IconName> = { casa: 'home', viaje: 'compass', pareja: 'heart', otro: 'users', directo: 'swap' };
 
 export function GroupRow({ g }: { g: Group }) {
   const nav = useNav(), s = useS();
   return (
     <li><button className="row tap" onClick={() => nav.push({ kind: 'group', id: g.id })}>
-      <RowIc n={KIND_IC[g.kind]} tone="accent" />
-      <span className="main"><span className="t">{g.name}</span><span className="s">{KIND[g.kind]} · {plural(g.members.length, 'persona', 'personas')}</span></span>
+      <GroupPhoto g={g} />
+      <span className="main"><span className="t">{g.name}</span><span className="s">{KIND[g.kind]} · {groupDates(g) || plural(g.members.filter(m => !s.profiles[m]?.fundOf).length, 'persona', 'personas')}{groupEnded(g) ? ' · terminó' : ''}{g.archivedAt ? ' · archivado' : ''}</span></span>
       <BalText c={groupBal(s, g.id)} />
     </button></li>
   );
@@ -44,6 +49,7 @@ export function Home() {
   const people = friends(s).map(p => ({ p, b: friendBal(s, p).b, i: pendingInfo(s, p) })).sort((a, b) => b.b - a.b);
   const top = people[0]?.b > 0 ? people[0] : null;
   const owe = people.filter(x => x.b < 0).sort((a, b) => a.b - b.b)[0];
+  const late = overdue(s), month = monthStats(s);
   return (
     <div className="scroll pad home">
       <header className="title-row"><div><p className="date">{todayLabel()}</p><h1>Hola, {s.profiles[s.me].name.split(' ')[0]}</h1></div>
@@ -62,6 +68,17 @@ export function Home() {
             <button className="btn tap" disabled={!t.owed && !t.owe} onClick={() => nav.openSheet(<MySettleSheet />, 'Saldar cuentas')}>Saldar cuentas</button>
           </div>
         </section>
+        {late.length > 0 && <section className="card plain-card remind">
+          <h2>Para cobrar</h2>
+          <ul>{late.slice(0, 3).map(x => (
+            <li key={x.p}><Av id={x.p} size="sm" /><span className="main"><span className="t">{short(s, x.p)} te debe {moneyT(x.amount)}</span><span className="s">sin saldar hace {x.days} días</span></span>
+              <button className="btn sm tap" onClick={() => remind(s, x.p, x.amount)}>Recordar</button></li>))}</ul>
+        </section>}
+        <button className="row card list-link tap" onClick={() => nav.push({ kind: 'summary', id: '' })}>
+          <span className="row-ic accent"><Icon n="cal" /></span>
+          <span className="main"><span className="t">Tu {monthName(thisMonth()).split(' ')[0]}</span><span className="s">Tu parte de lo gastado: {moneyT(month.total)}</span></span>
+          <Icon n="chevR" className="faint" />
+        </button>
         {people.length > 0 && <>
           <h2 className="sec">Personas <span className="hint">toca para ver por qué</span></h2>
           <ul className="tiles">{people.map(x => (
@@ -91,7 +108,10 @@ export function Groups() {
   return (
     <div className="scroll pad">
       <header className="title-row"><h1>Grupos</h1>
-        <button className="btn sm soft tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Nuevo</button></header>
+        <span className="bar-actions">
+          <button className="round tap" aria-label="Buscar gastos" onClick={() => nav.push({ kind: 'search', id: '' })}><Icon n="eye" /></button>
+          <button className="btn sm soft tap" onClick={() => nav.openSheet(<NewGroupSheet />, 'Nuevo grupo')}><Icon n="plus" sm />Nuevo</button>
+        </span></header>
       {visibleGroups(s).length ? <ul className="list card">{visibleGroups(s).map(g => <GroupRow key={g.id} g={g} />)}</ul> : <FirstRun />}
       {duo.length > 0 && <>
         <h2 className="sec">Entre dos</h2>
@@ -101,6 +121,10 @@ export function Groups() {
             <span className="main"><span className="t">{s.profiles[p].name}</span><span className="s">Gastos entre ustedes dos</span></span>
             <BalText c={friendBal(s, p).by[d.id] || 0} who /></button></li>;
         })}</ul>
+      </>}
+      {archivedGroups(s).length > 0 && <>
+        <h2 className="sec">Archivados <span className="hint">sus saldos siguen contando</span></h2>
+        <ul className="list card">{archivedGroups(s).map(g => <GroupRow key={g.id} g={g} />)}</ul>
       </>}
     </div>
   );
@@ -135,6 +159,10 @@ function evText(s: Snapshot, a: Activity): ReactNode {
     case 'pago_registrado': return e ? <>{payText(s, e)} {moneyT(e.amount)}{where}</> : <>{who} registró un pago</>;
     case 'pago_confirmado': return <>{who} {me ? 'confirmaste' : 'confirmó'} que le llegó el pago{where}</>;
     case 'comentario': return <>{who} {me ? 'comentaste' : 'comentó'} en {desc}: “{String(a.payload.texto ?? '')}”</>;
+    case 'grupo_editado': return <>{who} {me ? 'cambiaste' : 'cambió'} {a.payload.archived === true ? 'el grupo al archivo' : a.payload.name ? `el nombre a «${String(a.payload.name)}»` : a.payload.budget !== undefined ? 'el presupuesto' : a.payload.simplify !== undefined ? 'cómo se saldan las deudas' : a.payload.starts_on !== undefined || a.payload.ends_on !== undefined ? 'las fechas' : 'el grupo'}{where}</>;
+    case 'salio': return <>{who} {me ? 'saliste' : 'salió'} del grupo{where}</>;
+    case 'fondo_creado': return <>{who} {me ? 'creaste' : 'creó'} el fondo común{where}</>;
+    case 'miembro_quitado': return <>{who} {me ? 'quitaste' : 'quitó'} a {String(a.payload.nombre ?? 'alguien')} del grupo{where}</>;
   }
 }
 
@@ -176,6 +204,30 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = 
 const standalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 
+/** Lo de este aparato: avisos y bloqueo con huella o cara. */
+function PhoneExtras() {
+  const s = useS(), nav = useNav();
+  const [push, setPush] = useState(false), [lock, setLock] = useState(lockOn()), [canLock, setCanLock] = useState(false), [busy, setBusy] = useState(false);
+  useEffect(() => { pushOn().then(setPush); lockSupported().then(setCanLock); }, []);
+  const toggle = async (on: boolean, yes: () => Promise<void>, no: () => Promise<void> | void, set: (v: boolean) => void, okText: string) => {
+    setBusy(true);
+    try { if (on) await yes(); else await no(); set(on); buzz(); nav.toast(on ? okText : 'Desactivado'); } catch (e) { nav.toast(errMsg(e)); } finally { setBusy(false); }
+  };
+  if (!pushSupported() && !canLock) return null;
+  return (
+    <ul className="list card">
+      {pushSupported() && <li><label className="row toggle tap">
+        <span className="main"><span className="t">Avisos en este aparato</span><span className="s">Gastos nuevos, pagos por confirmar y comentarios. En iPhone, con la app instalada.</span></span>
+        <input type="checkbox" checked={push} disabled={busy} onChange={e => toggle(e.target.checked, enablePush, disablePush, setPush, 'Avisos activados')} />
+      </label></li>}
+      {canLock && <li><label className="row toggle tap">
+        <span className="main"><span className="t">Pedir huella o cara al abrir</span><span className="s">Con Face ID, la huella o Windows Hello de este aparato.</span></span>
+        <input type="checkbox" checked={lock} disabled={busy} onChange={e => toggle(e.target.checked, () => enableLock(s.profiles[s.me].name), disableLock, setLock, 'Bloqueo activado')} />
+      </label></li>}
+    </ul>
+  );
+}
+
 export function Account({ demo }: { demo: boolean }) {
   const s = useS(), nav = useNav(), me = s.profiles[s.me];
   const [name, setName] = useState(me.name);
@@ -212,6 +264,7 @@ export function Account({ demo }: { demo: boolean }) {
           <button className="btn tap" onClick={() => installEvt?.prompt()}>Instalar</button></>
           : <p className="s">{isIOS() ? 'En Safari toca Compartir y luego «Agregar a inicio».' : 'En el menú del navegador elige «Instalar app» o «Agregar a la pantalla de inicio».'}</p>}
       </section>}
+      <PhoneExtras />
       <dl className="list card prefs">
         <div className="theme"><dt>Tema</dt>
           <dd className="seg" role="radiogroup" aria-label="Tema">
@@ -225,6 +278,11 @@ export function Account({ demo }: { demo: boolean }) {
       <ul className="list card">
         <li><a className="row tap" href={TERMS_URL} target="_blank" rel="noopener"><RowIc n="receipt" /><span className="main"><span className="t">Términos de uso</span></span><Icon n="chevR" className="faint" /></a></li>
         <li><a className="row tap" href={PRIVACY_URL} target="_blank" rel="noopener"><RowIc n="eye" /><span className="main"><span className="t">Política de privacidad</span></span><Icon n="chevR" className="faint" /></a></li>
+      </ul>
+      <ul className="list card">
+        <li><button className="row tap" onClick={() => nav.openSheet(<QrSheet />, 'Tu código para cobrar')}><RowIc n="share" /><span className="main"><span className="t">Tu código para cobrar</span><span className="s">Un QR con tus datos de pago</span></span><Icon n="chevR" className="faint" /></button></li>
+        <li><button className="row tap" onClick={() => { download(`${exportName(s)}.csv`, exportCsv(s), 'text/csv;charset=utf-8'); nav.toast('Archivo listo para Excel'); }}><RowIc n="receipt" /><span className="main"><span className="t">Exportar todo a Excel</span><span className="s">Todos tus grupos, en CSV</span></span></button></li>
+        <li><button className="row tap" onClick={() => { if (!printReport(exportHtml(s))) nav.toast('El navegador bloqueó la ventana'); }}><RowIc n="copy" /><span className="main"><span className="t">Imprimir o guardar en PDF</span></span></button></li>
       </ul>
       {sure && <p className="split-status bad">Tienes {plural(pending, 'cambio', 'cambios')} sin enviar. Si sales ahora, se pierden.</p>}
       <button className="btn danger block tap" onClick={() => {

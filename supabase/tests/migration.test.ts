@@ -211,7 +211,15 @@ describe('seguridad', () => {
     expect(await runnable('authenticated')).toEqual([
       'accept_legal', 'add_member', 'add_placeholder', 'apply_op', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_account',
       'delete_expense', 'direct_group', 'invite_preview', 'is_admin', 'is_member', 'join_group', 'login_email', 'regenerate_invite',
-      'restore_expense', 'save_expense', 'shares_group', 'username_available'].sort());
+      'restore_expense', 'save_expense', 'shares_group', 'username_available',
+      // las 20 mejoras
+      'add_item', 'catch_up_recurring', 'create_fund', 'delete_item', 'delete_push_token', 'leave_group', 'save_push_token', 'scan_quota',
+      'set_expense_photo', 'set_member_role', 'toggle_item', 'update_group', 'remove_member', 'rename_placeholder'].sort());
+  });
+
+  it('a quién avisar solo lo sabe la función de avisos (clave de servicio)', async () => {
+    expect(await runnable('service_role')).toContain('push_targets');
+    expect(await runnable('authenticated')).not.toContain('push_targets');
   });
 
   it('nadie escribe directo, salvo comentar y editar su perfil', async () => {
@@ -390,5 +398,160 @@ describe('cambios sin conexión: cada uno se aplica una sola vez', () => {
   it('un cambio desconocido o incompleto se rechaza', async () => {
     await expect(apply(U3.gia, randomUUID(), 'borrar_todo', {})).rejects.toThrow(/no existe/);
     await expect(as(U3.gia, () => one(`select apply_op(null, 'delete_expense', '{}')`))).rejects.toThrow(/incompleto/);
+  });
+});
+
+describe('las 20 mejoras', () => {
+  const U4 = { ivo: '00000000-0000-0000-0000-0000000000c1', jan: '00000000-0000-0000-0000-0000000000c2', kim: '00000000-0000-0000-0000-0000000000c3' };
+  let g: string, ivo: string, jan: string;
+  const q = (u: string, sql: string, p: unknown[] = []) => as(u, () => one(sql, p));
+  const count = async (sql: string, p: unknown[]) => (await one<{ n: number }>(`select count(*)::int as n from ${sql}`, p)).n;
+  const gasto = (o: object) => JSON.stringify({ group_id: g, description: 'Luz', amount: 2000, split_mode: 'equal', payers: { [ivo]: 2000 }, shares: { [ivo]: 1000, [jan]: 1000 }, ...o });
+
+  beforeAll(async () => {
+    await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'ivo@ejemplo.do', '{"full_name":"Ivo"}'), ($2, 'jan@ejemplo.do', '{"full_name":"Jan"}'),
+      ($3, 'kim@ejemplo.do', '{"full_name":"Kim"}')`, [U4.ivo, U4.jan, U4.kim]);
+    ivo = await pid(U4.ivo); jan = await pid(U4.jan);
+    g = (await q(U4.ivo, `select create_group('Casa', 'casa') as g`)).g;
+    const tok = (await one('select invite_token from groups where id = $1', [g])).invite_token;
+    await q(U4.jan, 'select join_group($1)', [tok]);
+  });
+
+  it('solo un admin cambia el grupo: nombre, presupuesto, simplificar y archivar', async () => {
+    await expect(q(U4.jan, 'select update_group($1, $2)', [g, JSON.stringify({ name: 'Mía' })])).rejects.toThrow(/Solo un admin/);
+    await q(U4.ivo, 'select update_group($1, $2)', [g, JSON.stringify({ name: 'Casa Naco', budget: 4500000, simplify: true })]);
+    expect(await one('select name, budget::int, simplify, archived_at from groups where id = $1', [g])).toEqual({ name: 'Casa Naco', budget: 4500000, simplify: true, archived_at: null });
+    await q(U4.ivo, 'select update_group($1, $2)', [g, JSON.stringify({ budget: null, archived: true })]);
+    const r = await one('select budget, archived_at from groups where id = $1', [g]);
+    expect(r.budget).toBeNull(); expect(r.archived_at).not.toBeNull();
+    await q(U4.ivo, 'select update_group($1, $2)', [g, JSON.stringify({ archived: false })]);
+    expect(await count(`activity where group_id = $1 and verb = 'grupo_editado'`, [g])).toBe(3);
+  });
+
+  it('roles: siempre queda un admin', async () => {
+    await expect(q(U4.ivo, 'select set_member_role($1, $2, $3)', [g, ivo, 'miembro'])).rejects.toThrow(/al menos un admin/);
+    await q(U4.ivo, 'select set_member_role($1, $2, $3)', [g, jan, 'admin']);
+    await q(U4.jan, 'select set_member_role($1, $2, $3)', [g, jan, 'miembro']);
+    expect((await one('select role from group_members where group_id = $1 and profile_id = $2', [g, jan])).role).toBe('miembro');
+  });
+
+  it('salir del grupo solo con las cuentas saldadas', async () => {
+    await q(U4.ivo, 'select save_expense($1)', [gasto({})]);
+    await expect(q(U4.jan, 'select leave_group($1)', [g])).rejects.toThrow(/Salda tus cuentas/);
+    await q(U4.jan, 'select save_expense($1)', [JSON.stringify({ group_id: g, description: 'Pago', amount: 1000, is_payment: true, split_mode: 'payment', payers: { [jan]: 1000 }, shares: { [ivo]: 1000 } })]);
+    await q(U4.jan, 'select leave_group($1)', [g]);
+    expect(await count('group_members where group_id = $1 and profile_id = $2', [g, jan])).toBe(0);
+    expect(await count(`activity where group_id = $1 and verb = 'salio'`, [g])).toBe(1);
+    // vuelve para lo demás
+    const tok = (await one('select invite_token from groups where id = $1', [g])).invite_token;
+    await q(U4.jan, 'select join_group($1)', [tok]);
+  });
+
+  it('fondo común: uno por grupo, los aportes no esperan confirmación y no se puede reclamar', async () => {
+    const f = (await q(U4.ivo, 'select create_fund($1) as f', [g])).f;
+    expect((await q(U4.jan, 'select create_fund($1) as f', [g])).f).toBe(f);
+    const id = (await q(U4.jan, 'select save_expense($1) as id', [JSON.stringify({ group_id: g, description: 'Aporte', amount: 5000, is_payment: true,
+      split_mode: 'payment', payers: { [jan]: 5000 }, shares: { [f]: 5000 } })])).id;
+    expect((await one('select payment_status from expenses where id = $1', [id])).payment_status).toBe('confirmado');
+    await q(U4.ivo, 'select save_expense($1)', [JSON.stringify({ group_id: g, description: 'Hielo', amount: 3000, split_mode: 'equal', payers: { [f]: 3000 }, shares: { [ivo]: 1500, [jan]: 1500 } })]);
+    const tok = (await one('select invite_token from groups where id = $1', [g])).invite_token;
+    expect((await q(U4.kim, 'select invite_preview($1) as p', [tok])).p.placeholders).toEqual([]);
+    await expect(q(U4.kim, 'select join_group($1, $2)', [tok, f])).rejects.toThrow(/ya lo reclamó/);
+    expect((await as(U4.jan, () => one('select fund_of from profiles where id = $1', [f]))).fund_of).toBe(g);
+  });
+
+  it('gastos que se repiten: se ponen al día una sola vez y desde la fecha original', async () => {
+    const d = new Date(); d.setMonth(d.getMonth() - 2); d.setDate(Math.min(d.getDate(), 28));
+    const day = d.toISOString().slice(0, 10);
+    const root = (await q(U4.ivo, 'select save_expense($1) as id', [gasto({ description: 'Internet', date: day, repeat: 'mensual' })])).id;
+    expect((await q(U4.jan, 'select catch_up_recurring() as n')).n).toBe(2);
+    expect((await q(U4.ivo, 'select catch_up_recurring() as n')).n).toBe(0);
+    const copies = await all('select date::text, amount::int, created_by from expenses where repeat_from = $1 order by date', [root]);
+    expect(copies).toHaveLength(2);
+    expect(copies.every(c => c.amount === 2000 && c.created_by === ivo)).toBe(true);
+    expect(await count('expense_shares s join expenses e on e.id = s.expense_id where e.repeat_from = $1', [root])).toBe(4);
+    // quien no es del grupo no pone al día nada de este grupo
+    expect((await q(U4.kim, 'select catch_up_recurring() as n')).n).toBe(0);
+  });
+
+  it('lista de compras: la gente del grupo agrega, marca y borra; los de afuera no', async () => {
+    const i = (await q(U4.jan, `select add_item($1, '  Agua  ') as i`, [g])).i;
+    expect((await as(U4.ivo, () => one('select name, done_at from group_items where id = $1', [i])))).toEqual({ name: 'Agua', done_at: null });
+    await q(U4.ivo, 'select toggle_item($1)', [i]);
+    expect((await one('select done_by from group_items where id = $1', [i])).done_by).toBe(ivo);
+    await expect(q(U4.kim, `select add_item($1, 'Cerveza')`, [g])).rejects.toThrow(/No perteneces/);
+    expect(await as(U4.kim, () => all('select id from group_items where group_id = $1', [g]))).toEqual([]);
+    await q(U4.jan, 'select delete_item($1)', [i]);
+    expect(await count('group_items where id = $1', [i])).toBe(0);
+  });
+
+  it('fotos: solo la gente del grupo sube y ve; la ruta del gasto tiene que ser de su grupo', async () => {
+    const e = (await q(U4.ivo, 'select save_expense($1) as id', [gasto({ description: 'Gas' })])).id;
+    const path = `gastos/${g}/${e}-a1.jpg`;
+    await as(U4.ivo, () => db.query(`insert into storage.objects (bucket_id, name) values ('adjuntos', $1)`, [path]));
+    await expect(as(U4.kim, () => db.query(`insert into storage.objects (bucket_id, name) values ('adjuntos', $1)`, [`gastos/${g}/x.jpg`]))).rejects.toThrow();
+    await expect(as(U4.kim, () => db.query(`insert into storage.objects (bucket_id, name) values ('adjuntos', 'gastos/no-es-un-grupo/x.jpg')`))).rejects.toThrow();
+    expect(await as(U4.jan, () => all(`select name from storage.objects where bucket_id = 'adjuntos'`))).toEqual([{ name: path }]);
+    expect(await as(U4.kim, () => all(`select name from storage.objects where bucket_id = 'adjuntos'`))).toEqual([]);
+    await q(U4.jan, 'select set_expense_photo($1, $2)', [e, path]);
+    expect((await one('select photo_path from expenses where id = $1', [e])).photo_path).toBe(path);
+    await expect(q(U4.ivo, 'select set_expense_photo($1, $2)', [e, `gastos/00000000-0000-0000-0000-000000000000/x.jpg`])).rejects.toThrow(/no es de este grupo/);
+  });
+
+  it('avisos: cada cuenta guarda sus teléfonos y la función sabe a quién avisar (menos a quien lo hizo)', async () => {
+    await q(U4.jan, `select save_push_token('expo', 'ExponentPushToken[jan-telefono]')`);
+    await q(U4.ivo, `select save_push_token('web', '{"endpoint":"https://push.ejemplo/ivo"}')`);
+    await expect(q(U4.jan, `select save_push_token('fax', 'x')`)).rejects.toThrow(/no es válido/);
+    const a = (await one(`select id from activity where group_id = $1 and actor = $2 order by id desc limit 1`, [g, ivo])).id;
+    await db.exec('set role service_role');
+    try {
+      expect(await all('select token, kind from push_targets($1, $2)', [a, U4.ivo])).toEqual([{ token: 'ExponentPushToken[jan-telefono]', kind: 'expo' }]);
+      expect(await all('select token from push_targets($1, $2)', [a, U4.jan])).toEqual([]); // jan no hizo ese movimiento
+    } finally { await db.exec('reset role'); }
+    await expect(q(U4.jan, 'select * from push_targets($1, $2)', [a, U4.jan])).rejects.toThrow(/permission denied/);
+  });
+
+  it('recibos: hasta 40 por día', async () => {
+    for (let i = 0; i < 40; i++) expect((await q(U4.kim, 'select scan_quota() as ok')).ok).toBe(true);
+    expect((await q(U4.kim, 'select scan_quota() as ok')).ok).toBe(false);
+  });
+});
+
+describe('grupos de fecha a fecha y las personas del grupo', () => {
+  const U5 = { lia: '00000000-0000-0000-0000-0000000000d1', max: '00000000-0000-0000-0000-0000000000d2' };
+  let g: string, lia: string, max: string, sin: string;
+  const q = (u: string, sql: string, p: unknown[] = []) => as(u, () => one(sql, p));
+
+  beforeAll(async () => {
+    await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'lia@ejemplo.do', '{"full_name":"Lía"}'), ($2, 'max@ejemplo.do', '{"full_name":"Max"}')`, [U5.lia, U5.max]);
+    lia = await pid(U5.lia); max = await pid(U5.max);
+    g = (await q(U5.lia, `select create_group('Punta Cana', 'viaje') as g`)).g;
+    await q(U5.max, 'select join_group($1)', [(await one('select invite_token from groups where id = $1', [g])).invite_token]);
+    sin = (await q(U5.lia, `select add_placeholder($1, 'Primo de Max') as p`, [g])).p;
+  });
+
+  it('un grupo de fecha a fecha: las fechas se ponen, se quitan y el fin no va antes del inicio', async () => {
+    await q(U5.lia, 'select update_group($1, $2)', [g, JSON.stringify({ starts_on: '2026-12-20', ends_on: '2026-12-27' })]);
+    expect(await one('select starts_on::text, ends_on::text from groups where id = $1', [g])).toEqual({ starts_on: '2026-12-20', ends_on: '2026-12-27' });
+    await expect(q(U5.lia, 'select update_group($1, $2)', [g, JSON.stringify({ ends_on: '2026-12-01' })])).rejects.toThrow();
+    await q(U5.lia, 'select update_group($1, $2)', [g, JSON.stringify({ starts_on: null, ends_on: null })]);
+    expect(await one('select starts_on, ends_on from groups where id = $1', [g])).toEqual({ starts_on: null, ends_on: null });
+  });
+
+  it('un admin cambia el nombre de quien no tiene cuenta, pero no el de alguien con cuenta', async () => {
+    await expect(q(U5.max, `select rename_placeholder($1, $2, 'Otro')`, [g, sin])).rejects.toThrow(/Solo un admin/);
+    await q(U5.lia, `select rename_placeholder($1, $2, '  Luis  ')`, [g, sin]);
+    expect((await one('select name from profiles where id = $1', [sin])).name).toBe('Luis');
+    await expect(q(U5.lia, `select rename_placeholder($1, $2, 'Maxi')`, [g, max])).rejects.toThrow(/todavía no tiene cuenta/);
+  });
+
+  it('quitar a alguien: solo un admin, con sus cuentas saldadas, y queda anotado', async () => {
+    await q(U5.lia, 'select save_expense($1)', [JSON.stringify({ group_id: g, description: 'Taxi', amount: 1000, split_mode: 'equal', payers: { [lia]: 1000 }, shares: { [lia]: 500, [max]: 500 } })]);
+    await expect(q(U5.max, 'select remove_member($1, $2)', [g, lia])).rejects.toThrow(/Solo un admin/);
+    await expect(q(U5.lia, 'select remove_member($1, $2)', [g, max])).rejects.toThrow(/cuentas pendientes/);
+    await expect(q(U5.lia, 'select remove_member($1, $2)', [g, lia])).rejects.toThrow(/Salir del grupo/);
+    await q(U5.lia, 'select remove_member($1, $2)', [g, sin]);
+    expect(await one('select count(*)::int as n from group_members where group_id = $1 and profile_id = $2', [g, sin])).toEqual({ n: 0 });
+    expect((await one(`select payload from activity where group_id = $1 and verb = 'miembro_quitado'`, [g])).payload).toEqual({ nombre: 'Luis' });
   });
 });

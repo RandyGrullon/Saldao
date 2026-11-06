@@ -91,9 +91,17 @@ export async function start(s: Server, o: StartOptions = {}) {
   let t: ReturnType<typeof setTimeout> | undefined;
   unsub = s.subscribe(() => { clearTimeout(t); t = setTimeout(() => { refresh().catch(() => {}); }, 250); });
   // Con algo guardado, la app abre al instante y la base se pide detrás; la primera vez hay que esperarla.
-  if (base) { publish(); void sync(); return; }
+  if (base) { publish(); void sync().then(() => catchUp(g)); return; }
   await refresh(true);
   void flush();
+  void catchUp(g);
+}
+
+/** Los gastos que se repiten (el alquiler, la luz): al abrir la app se crean los que ya tocaban. */
+async function catchUp(g: number) {
+  if (!server || g !== gen || offline) return;
+  const made = await server.catchUpRecurring().catch(() => 0);
+  if (made > 0 && g === gen) await refresh().catch(() => {});
 }
 export function stop() {
   gen++;
@@ -214,6 +222,23 @@ function actions(ctx: Ctx): Backend {
     acceptLegal: () => s.acceptLegal(),
     async deleteAccount(confirm) { const forget = forgetter(); await s.deleteAccount(confirm); await forget(); },
     async signOut() { const forget = forgetter(); await s.signOut(); await forget(); },
+    // lo demás necesita internet: va directo a la base
+    updateGroup: (g, p) => s.updateGroup(g, p),
+    setMemberRole: (g, p, r) => s.setMemberRole(g, p, r),
+    removeMember: (g, p) => s.removeMember(g, p),
+    renamePlaceholder: (g, p, n) => s.renamePlaceholder(g, p, n),
+    leaveGroup: g => s.leaveGroup(g),
+    createFund: g => s.createFund(g),
+    catchUpRecurring: () => s.catchUpRecurring(),
+    addItem: (g, n) => s.addItem(g, n),
+    toggleItem: id => s.toggleItem(id),
+    deleteItem: id => s.deleteItem(id),
+    uploadPhoto: (path, f) => s.uploadPhoto(path, f),
+    photoUrl: path => s.photoUrl(path),
+    setExpensePhoto: (id, path) => s.setExpensePhoto(id, path),
+    savePushToken: (k, t) => s.savePushToken(k, t),
+    deletePushToken: t => s.deletePushToken(t),
+    scanReceipt: (img, mime) => s.scanReceipt(img, mime),
   };
 }
 

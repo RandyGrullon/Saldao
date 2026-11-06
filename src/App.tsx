@@ -13,6 +13,8 @@ import { Icon, type IconName } from './ui/icons';
 import { HomeSkeleton, errMsg } from './ui/kit';
 import { NavShell, useNav, type Nav, type Tab } from './ui/nav';
 import { SyncPill } from './ui/sync';
+import { ListScreen, SearchScreen, SummaryScreen } from './screens/more';
+import { lockOn, unlock } from './lib/lock';
 
 /** La bienvenida de index.html se va cuando hay algo que mostrar (y a más tardar a los 4 s). */
 function hideSplash() {
@@ -71,17 +73,46 @@ function Ready() {
   const busy = useBusy();
   const unread = useUnread(s);
   const [token] = useState(pendingInvite);
+  const [locked, setLocked] = useState(lockOn);
+  // lo nuevo en Actividad, en el ícono de la app instalada (donde el sistema lo permite)
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    (unread.n ? nav.setAppBadge?.(unread.n) : nav.clearAppBadge?.())?.catch(() => {});
+  }, [unread.n]);
+  // con el bloqueo puesto, se vuelve a pedir la huella si la app estuvo cinco minutos de fondo
+  useEffect(() => {
+    let away = 0;
+    const h = () => { if (document.hidden) away = Date.now(); else if (away && lockOn() && Date.now() - away > 5 * 60_000) setLocked(true); };
+    document.addEventListener('visibilitychange', h);
+    return () => document.removeEventListener('visibilitychange', h);
+  }, []);
   if (!s) return null;
+  if (locked) return <LockScreen onOpen={() => setLocked(false)} />;
   // Con Google, una cuenta de antes de los términos o una versión nueva: primero aceptar.
   if (!s.legalOk) return <LegalGate />;
   return (
     <NavShell
       renderTab={t => t === 'home' ? <Home /> : t === 'groups' ? <Groups /> : t === 'activity' ? <ActivityTab unread={unread} /> : <Account demo={DEMO} />}
-      renderRoute={r => r.kind === 'group' ? <GroupScreen id={r.id} /> : r.kind === 'person' ? <PersonScreen id={r.id} /> : <ExpenseScreen id={r.id} />}
+      renderRoute={r => r.kind === 'group' ? <GroupScreen id={r.id} /> : r.kind === 'person' ? <PersonScreen id={r.id} /> : r.kind === 'list' ? <ListScreen groupId={r.id} />
+        : r.kind === 'summary' ? <SummaryScreen /> : r.kind === 'search' ? <SearchScreen /> : <ExpenseScreen id={r.id} />}
       tabbar={nav => <><SyncPill /><Tabbar nav={nav} unread={unread.n} /></>}>
       {token && <OpenOnce node={<JoinSheet token={token} />} label="Invitación" />}
       {busy && <div className="top-loader" role="progressbar" aria-label="Guardando" />}
     </NavShell>
+  );
+}
+
+/** Bloqueada: la huella, la cara o el PIN del aparato para seguir. */
+function LockScreen({ onOpen }: { onOpen: () => void }) {
+  const [msg, setMsg] = useState('');
+  const go = async () => { setMsg(''); if (await unlock()) onOpen(); else setMsg('No se pudo comprobar. Intenta de nuevo.'); };
+  return (
+    <main className="gate">
+      <div><img className="brand-ic" src="/favicon.svg" alt="" width="56" height="56" /><h1>{APP.name} está bloqueado</h1>
+        <p className="lead">Usa la huella, la cara o el PIN de este aparato para ver tus cuentas.</p></div>
+      <button className="btn primary block tap" onClick={go}><Icon n="eye" />Desbloquear</button>
+      {msg && <p className="err" role="alert">{msg}</p>}
+    </main>
   );
 }
 

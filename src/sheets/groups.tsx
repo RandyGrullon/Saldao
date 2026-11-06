@@ -16,6 +16,7 @@ export function NewGroupSheet() {
   const [newPeople, setNewPeople] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [from, setFrom] = useState(''), [to, setTo] = useState('');
   const addDraft = () => { const n = draft.trim(); if (n) { setNewPeople(p => [...p, n]); setDraft(''); buzz(); } };
   const create = async () => {
     setBusy(true);
@@ -23,6 +24,7 @@ export function NewGroupSheet() {
       let g = '';
       await run(async b => {
         g = await b.createGroup(name.trim(), kind);
+        if (from || to) await b.updateGroup(g, { startsOn: from || null, endsOn: to || null });
         for (const p of picked) await b.addMember(g, p);
         for (const n of newPeople) await b.addPlaceholder(g, n);
       });
@@ -39,6 +41,12 @@ export function NewGroupSheet() {
         <div className="seg" role="radiogroup" aria-label="Tipo de grupo">
           {KINDS.map(([k, l]) => <button key={k} className="tap" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}>{l}</button>)}
         </div>
+        <h3>Fechas, si es de fecha a fecha (opcional)</h3>
+        <div className="chips">
+          <label className="chip"><Icon n="cal" sm />Desde<input type="date" value={from} onChange={e => { setFrom(e.target.value); if (to && e.target.value > to) setTo(''); }} aria-label="Desde" /></label>
+          <label className="chip"><Icon n="cal" sm />Hasta<input type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} aria-label="Hasta" /></label>
+        </div>
+        {(from || to) && <p className="note">Un viaje o un evento: al terminar, el grupo te propone saldar y archivarlo.</p>}
         {known.length > 0 && <>
           <h3>Personas de tus otros grupos</h3>
           <div className="chips">{known.map(p => (

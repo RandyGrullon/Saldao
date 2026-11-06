@@ -1,14 +1,24 @@
 import type { Cents, Expense, Id, Item, SplitMode } from './domain';
 
 export type GroupKind = 'casa' | 'viaje' | 'pareja' | 'otro' | 'directo';
-export interface Profile { id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null; deletedAt: string | null }
+export interface Profile {
+  id: Id; userId: Id | null; name: string; email: string | null; payout: string | null; username: string | null; deletedAt: string | null;
+  fundOf: Id | null;   // el fondo común de ese grupo (no es una persona)
+}
 export interface Group {
   id: Id; name: string; kind: GroupKind; currency: string; inviteToken: string; createdAt: string;
   members: Id[]; roles: Record<Id, 'admin' | 'miembro'>;
+  budget: number | null;      // presupuesto del mes, en centavos
+  simplify: boolean;          // deudas simplificadas: el menor número de pagos
+  archivedAt: string | null;
+  photoPath: string | null;
+  startsOn: string | null;    // grupo de fecha a fecha (un viaje): YYYY-MM-DD
+  endsOn: string | null;
 }
+export interface ListItem { id: Id; groupId: Id; name: string; addedBy: Id; doneBy: Id | null; doneAt: string | null; createdAt: string }
 export interface Comment { id: Id; expenseId: Id; profileId: Id; body: string; createdAt: string; pending?: boolean }
 export type Verb = 'grupo_creado' | 'miembro_agregado' | 'se_unio' | 'gasto_creado' | 'gasto_editado' | 'gasto_borrado'
-  | 'gasto_restaurado' | 'pago_registrado' | 'pago_confirmado' | 'comentario';
+  | 'gasto_restaurado' | 'pago_registrado' | 'pago_confirmado' | 'comentario' | 'grupo_editado' | 'salio' | 'fondo_creado' | 'miembro_quitado';
 export interface Activity { id: string; groupId: Id; actor: Id; verb: Verb; expenseId: Id | null; payload: Record<string, unknown>; createdAt: string }
 
 export interface Snapshot {
@@ -18,6 +28,7 @@ export interface Snapshot {
   expenses: Expense[];      // incluye borrados (para restaurarlos desde Actividad)
   comments: Comment[];
   activity: Activity[];
+  items: ListItem[];        // listas de compras de los grupos
   legalOk: boolean;         // aceptó la versión vigente de los términos y la privacidad
 }
 
@@ -26,6 +37,15 @@ export interface ExpenseInput {
   splitMode: SplitMode; splitParams: Expense['splitParams']; items: Item[] | null; tax: number; tip: number;
   note: string | null; repeat: string | null; payers: Record<Id, Cents>; shares: Record<Id, Cents>; isPayment: boolean;
 }
+/** Lo que se puede cambiar de un grupo (un admin). */
+export interface GroupPatch {
+  name?: string; budget?: number | null; simplify?: boolean; photoPath?: string | null; archived?: boolean;
+  startsOn?: string | null; endsOn?: string | null;
+}
+/** Un archivo para subir: los datos y, si hay, una dirección local para mostrarlo ya (la demostración la usa). */
+export interface Upload { data: Blob | ArrayBuffer; type: string; uri?: string }
+/** Lo que se leyó de un recibo (montos en centavos). */
+export interface ScanResult { merchant: string | null; date: string | null; items: { name: string; price: number }[]; tax: number; tip: number; total: number | null }
 export interface InvitePreview { id: Id; name: string; kind: GroupKind; members: number; placeholders: { id: Id; name: string }[] }
 
 // ── cambios que esperan conexión ─────────────────────────────
@@ -60,6 +80,30 @@ export interface Server {
   /** Borra la cuenta (hay que escribir BORRAR) y cierra la sesión. */
   deleteAccount(confirm: string): Promise<void>;
   signOut(): Promise<void>;
+  // ── grupos ──
+  updateGroup(groupId: Id, patch: GroupPatch): Promise<void>;
+  setMemberRole(groupId: Id, profileId: Id, role: 'admin' | 'miembro'): Promise<void>;
+  /** Quitar a alguien del grupo (un admin; con sus cuentas saldadas). */
+  removeMember(groupId: Id, profileId: Id): Promise<void>;
+  /** Cambiar el nombre de quien todavía no tiene cuenta. */
+  renamePlaceholder(groupId: Id, profileId: Id, name: string): Promise<void>;
+  leaveGroup(groupId: Id): Promise<void>;
+  createFund(groupId: Id): Promise<Id>;
+  /** Pone al día los gastos que se repiten; devuelve cuántos creó. */
+  catchUpRecurring(): Promise<number>;
+  // ── lista de compras ──
+  addItem(groupId: Id, name: string): Promise<Id>;
+  toggleItem(id: Id): Promise<void>;
+  deleteItem(id: Id): Promise<void>;
+  // ── fotos ──
+  uploadPhoto(path: string, file: Upload): Promise<void>;
+  /** Una dirección para ver la foto (firmada y por un rato: el almacenamiento es privado). */
+  photoUrl(path: string): Promise<string>;
+  setExpensePhoto(expenseId: Id, path: string | null): Promise<void>;
+  // ── avisos y recibos ──
+  savePushToken(kind: 'web' | 'expo', token: string): Promise<void>;
+  deletePushToken(token: string): Promise<void>;
+  scanReceipt(image: string, mime: string): Promise<ScanResult>;
 }
 
 /**

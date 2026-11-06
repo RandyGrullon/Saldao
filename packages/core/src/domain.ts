@@ -17,7 +17,8 @@ export interface Expense {
   isPayment: boolean;
   paymentStatus: 'pendiente' | 'confirmado' | null;
   splitMode: SplitMode;
-  splitParams: { on?: Id[]; vals?: Record<Id, number>; method?: 'transferencia' | 'efectivo' };
+  // unit: 'noches' es «Partes» contado en noches (en un viaje, quien llegó después paga menos hospedaje)
+  splitParams: { on?: Id[]; vals?: Record<Id, number>; method?: 'transferencia' | 'efectivo'; unit?: 'noches' };
   items: Item[] | null;
   tax: number;             // % ITBIS
   tip: number;             // % ley
@@ -29,6 +30,8 @@ export interface Expense {
   createdAt: string;       // ISO
   deletedAt: string | null;
   pending?: boolean;       // anotado en el teléfono, todavía sin enviar a la base
+  photoPath?: string | null;  // foto del comprobante (almacenamiento «adjuntos»)
+  repeatFrom?: Id | null;     // copia de un gasto que se repite: el original
 }
 
 export const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);

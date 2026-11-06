@@ -4,7 +4,7 @@ import type { Expense, Id, Item } from './domain';
 import { OFFLINE, RetryLater } from './errors';
 import { typedUser } from './format';
 import { LEGAL_VERSION } from './legal';
-import type { Activity, ExpenseInput, Group, InvitePreview, Op, Server, Snapshot } from './types';
+import type { Activity, ExpenseInput, Group, InvitePreview, ListItem, Op, ScanResult, Server, Snapshot } from './types';
 
 // ── conexión ─────────────────────────────────────────────────
 // Cada app la configura al arrancar: la web con sus variables de Vite y el origen de la página; la nativa con las suyas,
@@ -155,7 +155,7 @@ const toJson = (v: unknown) => v as Json;
 
 type Money = Pick<Tables<'expense_payers'>, 'profile_id' | 'amount'>;
 type ExpenseRow = Tables<'expenses'> & { expense_payers: Money[]; expense_shares: Money[] };
-type GroupRow = Pick<Tables<'groups'>, 'id' | 'name' | 'kind' | 'currency' | 'invite_token' | 'created_at'> & {
+type GroupRow = Pick<Tables<'groups'>, 'id' | 'name' | 'kind' | 'currency' | 'invite_token' | 'created_at' | 'budget' | 'simplify' | 'archived_at' | 'photo_path' | 'starts_on' | 'ends_on'> & {
   group_members: Pick<Tables<'group_members'>, 'profile_id' | 'role'>[];
 };
 const toExpense = (r: ExpenseRow): Expense => ({
@@ -163,6 +163,7 @@ const toExpense = (r: ExpenseRow): Expense => ({
   amount: Number(r.amount), fxRate: Number(r.fx_rate), isPayment: r.is_payment, paymentStatus: r.payment_status,
   splitMode: r.split_mode, splitParams: fromJson<Expense['splitParams']>(r.split_params) ?? {}, items: fromJson<Item[] | null>(r.items),
   tax: Number(r.tax), tip: Number(r.tip), note: r.note, repeat: r.repeat, createdBy: r.created_by, createdAt: r.created_at, deletedAt: r.deleted_at,
+  photoPath: r.photo_path, repeatFrom: r.repeat_from,
   payers: Object.fromEntries(r.expense_payers.map(x => [x.profile_id, Number(x.amount)])),
   shares: Object.fromEntries(r.expense_shares.map(x => [x.profile_id, Number(x.amount)])),
 });
@@ -170,6 +171,8 @@ const toGroup = (r: GroupRow): Group => ({
   id: r.id, name: r.name, kind: r.kind, currency: r.currency, inviteToken: r.invite_token, createdAt: r.created_at,
   members: r.group_members.map(m => m.profile_id),
   roles: Object.fromEntries(r.group_members.map(m => [m.profile_id, m.role])),
+  budget: r.budget == null ? null : Number(r.budget), simplify: r.simplify, archivedAt: r.archived_at, photoPath: r.photo_path,
+  startsOn: r.starts_on, endsOn: r.ends_on,
 });
 
 let me: Id | null = null;
@@ -196,32 +199,35 @@ export const supabaseBackend: Server = {
   async load(): Promise<Snapshot> {
     const user = await sessionUser();
     const c = sb();
-    const [profiles, groups, expenses, comments, activity, legal] = await Promise.all([
+    const [profiles, groups, expenses, comments, activity, legal, items] = await Promise.all([
       // el correo no se pide (la base no lo deja leer): el tuyo viene de la sesión
-      ok(c.from('profiles').select('id, user_id, name, payout, username, deleted_at')),
-      ok(c.from('groups').select('id, name, kind, currency, invite_token, created_at, group_members(profile_id, role)').is('archived_at', null)),
+      ok(c.from('profiles').select('id, user_id, name, payout, username, deleted_at, fund_of')),
+      // también los archivados: sus saldos siguen contando y se pueden desarchivar
+      ok(c.from('groups').select('id, name, kind, currency, invite_token, created_at, budget, simplify, archived_at, photo_path, starts_on, ends_on, group_members(profile_id, role)')),
       ok(c.from('expenses').select('*, expense_payers(profile_id, amount), expense_shares(profile_id, amount)').order('date', { ascending: false }).limit(3000)),
       ok(c.from('comments').select('id, expense_id, profile_id, body, created_at').is('deleted_at', null).order('created_at')),
       ok(c.from('activity').select('*').order('id', { ascending: false }).limit(300)),
       ok(c.from('legal_acceptances').select('version').eq('version', LEGAL_VERSION)),
+      ok(c.from('group_items').select('*').order('created_at')),
     ]);
     me = profiles.find(p => p.user_id === user.id)?.id ?? null;
     if (!me) throw new Error('No encontramos tu perfil');
     return {
       me,
       profiles: Object.fromEntries(profiles.map(p => [p.id, { id: p.id, userId: p.user_id, name: p.name, email: p.user_id === user.id ? user.email ?? null : null,
-        payout: p.payout, username: p.username, deletedAt: p.deleted_at }])),
+        payout: p.payout, username: p.username, deletedAt: p.deleted_at, fundOf: p.fund_of }])),
       groups: groups.map(toGroup),
       expenses: expenses.map(toExpense),
       comments: comments.map(r => ({ id: r.id, expenseId: r.expense_id, profileId: r.profile_id, body: r.body, createdAt: r.created_at })),
       activity: activity.map((r): Activity => ({ id: String(r.id), groupId: r.group_id, actor: r.actor, verb: r.verb, expenseId: r.expense_id,
         payload: fromJson<Record<string, unknown>>(r.payload) ?? {}, createdAt: r.created_at })),
+      items: items.map((r): ListItem => ({ id: r.id, groupId: r.group_id, name: r.name, addedBy: r.added_by, doneBy: r.done_by, doneAt: r.done_at, createdAt: r.created_at })),
       legalOk: legal.length > 0,
     };
   },
   subscribe(onChange) {
     const ch = sb().channel('saldao-cambios');
-    for (const table of ['expenses', 'expense_payers', 'expense_shares', 'comments', 'activity', 'group_members', 'groups', 'profiles'])
+    for (const table of ['expenses', 'expense_payers', 'expense_shares', 'comments', 'activity', 'group_members', 'groups', 'profiles', 'group_items'])
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
     ch.subscribe();
     return () => { sb().removeChannel(ch); };
@@ -249,4 +255,51 @@ export const supabaseBackend: Server = {
     await sb().auth.signOut({ scope: 'local' });
   },
   async signOut() { await sb().auth.signOut(); },
+  // ── grupos ──
+  async updateGroup(groupId, x) {
+    const p: Record<string, unknown> = {};
+    if (x.name !== undefined) p.name = x.name;
+    if (x.budget !== undefined) p.budget = x.budget;
+    if (x.simplify !== undefined) p.simplify = x.simplify;
+    if (x.photoPath !== undefined) p.photo_path = x.photoPath;
+    if (x.archived !== undefined) p.archived = x.archived;
+    if (x.startsOn !== undefined) p.starts_on = x.startsOn;
+    if (x.endsOn !== undefined) p.ends_on = x.endsOn;
+    await ok(sb().rpc('update_group', { p_group: groupId, p: toJson(p) }));
+  },
+  setMemberRole: async (groupId, profileId, role) => { await ok(sb().rpc('set_member_role', { p_group: groupId, p_profile: profileId, p_role: role })); },
+  leaveGroup: async groupId => { await ok(sb().rpc('leave_group', { p_group: groupId })); },
+  removeMember: async (groupId, profileId) => { await ok(sb().rpc('remove_member', { p_group: groupId, p_profile: profileId })); },
+  renamePlaceholder: async (groupId, profileId, name) => { await ok(sb().rpc('rename_placeholder', { p_group: groupId, p_profile: profileId, p_name: name })); },
+  createFund: groupId => ok(sb().rpc('create_fund', { p_group: groupId })),
+  catchUpRecurring: () => ok(sb().rpc('catch_up_recurring')),
+  // ── lista de compras ──
+  addItem: (groupId, name) => ok(sb().rpc('add_item', { p_group: groupId, p_name: name })),
+  toggleItem: async id => { await ok(sb().rpc('toggle_item', { p_id: id })); },
+  deleteItem: async id => { await ok(sb().rpc('delete_item', { p_id: id })); },
+  // ── fotos: almacenamiento privado, se ven con una dirección firmada por un rato ──
+  async uploadPhoto(path, file) {
+    const { error } = await sb().storage.from('adjuntos').upload(path, file.data, { contentType: file.type, upsert: true });
+    if (error) throw new Error(/size|large/i.test(error.message) ? 'La foto pesa más de 2 MB.' : 'No se pudo subir la foto. Revisa tu conexión.');
+  },
+  async photoUrl(path) {
+    const { data, error } = await sb().storage.from('adjuntos').createSignedUrl(path, 3600);
+    if (error || !data) throw new Error('No se pudo abrir la foto');
+    return data.signedUrl;
+  },
+  // sin foto: null (la base la quita); los tipos de la base no saben que el texto puede faltar
+  setExpensePhoto: async (expenseId, path) => { await ok(sb().rpc('set_expense_photo', { p_id: expenseId, p_path: path as string })); },
+  // ── avisos y recibos ──
+  savePushToken: async (kind, token) => { await ok(sb().rpc('save_push_token', { p_kind: kind, p_token: token })); },
+  deletePushToken: async token => { await ok(sb().rpc('delete_push_token', { p_token: token })); },
+  async scanReceipt(image, mime) {
+    await sessionUser();
+    const { data, error } = await sb().functions.invoke<ScanResult & { error?: string }>('leer-recibo', { body: { image, mime } });
+    if (error) {
+      const msg = await (error as { context?: Response }).context?.json?.().then((j: { error?: string }) => j?.error, () => null).catch(() => null);
+      throw new Error(msg || 'No se pudo leer el recibo. Prueba con una foto más clara o anótalo a mano.');
+    }
+    if (!data || data.error) throw new Error(data?.error || 'No se pudo leer el recibo.');
+    return data;
+  },
 };

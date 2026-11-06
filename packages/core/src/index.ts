@@ -4,6 +4,7 @@ export * from './app';
 export * from './categories';
 export * from './derive';
 export * from './domain';
+export * from './features';
 export * from './errors';
 export * from './format';
 export * from './invite';

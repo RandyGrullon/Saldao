@@ -13,7 +13,7 @@ export type Database = {
           group_id: string
           id: number
           payload: Json
-          verb: "grupo_creado" | "miembro_agregado" | "se_unio" | "gasto_creado" | "gasto_editado" | "gasto_borrado" | "gasto_restaurado" | "pago_registrado" | "pago_confirmado" | "comentario"
+          verb: "grupo_creado" | "miembro_agregado" | "se_unio" | "gasto_creado" | "gasto_editado" | "gasto_borrado" | "gasto_restaurado" | "pago_registrado" | "pago_confirmado" | "comentario" | "grupo_editado" | "salio" | "fondo_creado" | "miembro_quitado"
         }
         Insert: never
         Update: never
@@ -144,7 +144,9 @@ export type Database = {
           items: Json | null
           note: string | null
           payment_status: "pendiente" | "confirmado" | null
+          photo_path: string | null
           repeat: "semanal" | "quincenal" | "mensual" | "anual" | null
+          repeat_from: string | null
           split_mode: "equal" | "exact" | "percent" | "shares" | "adjust" | "items" | "payment"
           split_params: Json
           tax: number
@@ -177,10 +179,53 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "expenses_repeat_from_fkey"
+            columns: ["repeat_from"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "expenses_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_items: {
+        Row: {
+          added_by: string
+          created_at: string
+          done_at: string | null
+          done_by: string | null
+          group_id: string
+          id: string
+          name: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "group_items_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_items_done_by_fkey"
+            columns: ["done_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
         ]
@@ -214,13 +259,18 @@ export type Database = {
       groups: {
         Row: {
           archived_at: string | null
+          budget: number | null
           created_at: string
           created_by: string
           currency: string
+          ends_on: string | null
           id: string
           invite_token: string
           kind: "casa" | "viaje" | "pareja" | "otro" | "directo"
           name: string
+          photo_path: string | null
+          simplify: boolean
+          starts_on: string | null
         }
         Insert: never
         Update: never
@@ -252,6 +302,7 @@ export type Database = {
           created_by: string | null
           default_currency: string
           deleted_at: string | null
+          fund_of: string | null
           id: string
           name: string
           payout: string | null
@@ -272,6 +323,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_fund_of_fkey"
+            columns: ["fund_of"]
+            isOneToOne: true
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -282,6 +340,13 @@ export type Database = {
           p_version: string
         }
         Returns: undefined
+      }
+      add_item: {
+        Args: {
+          p_group: string
+          p_name: string
+        }
+        Returns: string
       }
       add_member: {
         Args: {
@@ -312,11 +377,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      catch_up_recurring: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       confirm_payment: {
         Args: {
           p_id: string
         }
         Returns: undefined
+      }
+      create_fund: {
+        Args: {
+          p_group: string
+        }
+        Returns: string
       }
       create_group: {
         Args: {
@@ -339,6 +414,18 @@ export type Database = {
       delete_expense: {
         Args: {
           p_id: string
+        }
+        Returns: undefined
+      }
+      delete_item: {
+        Args: {
+          p_id: string
+        }
+        Returns: undefined
+      }
+      delete_push_token: {
+        Args: {
+          p_token: string
         }
         Returns: undefined
       }
@@ -373,6 +460,12 @@ export type Database = {
         }
         Returns: string
       }
+      leave_group: {
+        Args: {
+          p_group: string
+        }
+        Returns: undefined
+      }
       login_email: {
         Args: {
           p_password: string
@@ -386,6 +479,21 @@ export type Database = {
         }
         Returns: string
       }
+      remove_member: {
+        Args: {
+          p_group: string
+          p_profile: string
+        }
+        Returns: undefined
+      }
+      rename_placeholder: {
+        Args: {
+          p_group: string
+          p_name: string
+          p_profile: string
+        }
+        Returns: undefined
+      }
       restore_expense: {
         Args: {
           p_id: string
@@ -398,11 +506,50 @@ export type Database = {
         }
         Returns: string
       }
+      save_push_token: {
+        Args: {
+          p_kind: string
+          p_token: string
+        }
+        Returns: undefined
+      }
+      scan_quota: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      set_expense_photo: {
+        Args: {
+          p_id: string
+          p_path: string
+        }
+        Returns: undefined
+      }
+      set_member_role: {
+        Args: {
+          p_group: string
+          p_profile: string
+          p_role: string
+        }
+        Returns: undefined
+      }
       shares_group: {
         Args: {
           p: string
         }
         Returns: boolean
+      }
+      toggle_item: {
+        Args: {
+          p_id: string
+        }
+        Returns: undefined
+      }
+      update_group: {
+        Args: {
+          p_group: string
+          p: Json
+        }
+        Returns: undefined
       }
       username_available: {
         Args: {

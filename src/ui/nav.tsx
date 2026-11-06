@@ -2,7 +2,7 @@ import { flushSync } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as RPointerEvent } from 'react';
 
 export type Tab = 'home' | 'groups' | 'activity' | 'account';
-export type Route = { kind: 'group' | 'person' | 'expense'; id: string };
+export type Route = { kind: 'group' | 'person' | 'expense' | 'list' | 'summary' | 'search'; id: string };
 type Entry = { key: number; route: Route; leaving?: boolean };
 type SheetSt = { key: number; node: ReactNode; label: string; full?: boolean; leaving?: boolean };
 type ToastSt = { key: number; text: string; undo?: () => void };

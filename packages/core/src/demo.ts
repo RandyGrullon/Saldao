@@ -1,9 +1,9 @@
 // Backend de demostración: los datos del prototipo en memoria. `npm run dev:demo`.
 // Salir o borrar la cuenta llama a `onExit` (en la web, recargar la página: vuelve a empezar).
 import { apportion, itemSplit, split, type Cents, type Expense, type Id, type Item } from './domain';
-import type { Activity, Comment, ExpenseInput, Group, Profile, Server, Snapshot, Verb } from './types';
+import type { Activity, Comment, ExpenseInput, Group, ListItem, Profile, ScanResult, Server, Snapshot, Verb } from './types';
 
-const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout, username: null, deletedAt: null });
+const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout, username: null, deletedAt: null, fundOf: null });
 let profiles: Record<Id, Profile> = {
   me: P('me', 'Carolina Méndez', 'Banco Popular · ahorro · 7734'),
   laura: P('laura', 'Laura Peña', 'Banco Popular · ahorro · 4821'),
@@ -13,7 +13,8 @@ let profiles: Record<Id, Profile> = {
 };
 const ALL5 = ['me', 'laura', 'miguel', 'paola', 'andres'];
 const G = (id: Id, name: string, kind: Group['kind'], members: Id[], createdAt: string): Group =>
-  ({ id, name, kind, currency: 'DOP', inviteToken: `demo-${id}`, createdAt, members, roles: Object.fromEntries(members.map((m, i) => [m, i ? 'miembro' : 'admin'])) });
+  ({ id, name, kind, currency: 'DOP', inviteToken: `demo-${id}`, createdAt, members, roles: Object.fromEntries(members.map((m, i) => [m, i ? 'miembro' : 'admin'])),
+    budget: null, simplify: false, archivedAt: null, photoPath: null, startsOn: null, endsOn: null });
 let groups: Group[] = [
   G('samana', 'Samaná', 'viaje', ALL5, '2026-10-25T10:00:00'),
   G('naco', 'Apto. Naco', 'casa', ['me', 'laura', 'miguel'], '2025-03-01T10:00:00'),
@@ -65,6 +66,12 @@ let expenses: Expense[] = [
   E({ id: 's1', groupId: 'd-paola', description: 'Almuerzo del viernes', category: 'comida', date: '2026-10-23', amount: 196000, payers: { paola: 196000 },
     shares: eq(196000, ['me', 'paola']), createdBy: 'paola', createdAt: '2026-10-23T13:30:00' }),
 ];
+// la lista de compras del apartamento, y las fotos en memoria (en la demostración no se sube nada)
+let items: ListItem[] = [
+  { id: 'l1', groupId: 'naco', name: 'Botellón de agua', addedBy: 'laura', doneBy: null, doneAt: null, createdAt: '2026-11-02T08:00:00' },
+  { id: 'l2', groupId: 'naco', name: 'Detergente', addedBy: 'me', doneBy: null, doneAt: null, createdAt: '2026-11-03T19:30:00' },
+];
+const photos = new Map<string, string>();
 let comments: Comment[] = [{ id: 'c1', expenseId: 'e4', profileId: 'laura', body: 'La langosta valió cada peso.', createdAt: '2026-11-01T09:12:00' }];
 
 let actSeq = 0;
@@ -113,7 +120,7 @@ const writes = {
 export const createDemoBackend = (onExit: () => void): Server => ({
   async load(): Promise<Snapshot> {
     return { me: 'me', profiles: { ...profiles }, groups: groups.map(g => ({ ...g })), expenses: [...expenses], comments: [...comments],
-      activity: [...activity].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), legalOk: true };
+      activity: [...activity].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), items: [...items], legalOk: true };
   },
   subscribe: () => () => {},
   async applyOp(op) {
@@ -132,7 +139,7 @@ export const createDemoBackend = (onExit: () => void): Server => ({
     return g.id;
   },
   async addPlaceholder(groupId, name) {
-    const p: Profile = { id: uid('p'), userId: null, name, email: null, payout: null, username: null, deletedAt: null };
+    const p: Profile = { id: uid('p'), userId: null, name, email: null, payout: null, username: null, deletedAt: null, fundOf: null };
     profiles = { ...profiles, [p.id]: p };
     groups = groups.map(g => g.id === groupId ? { ...g, members: [...g.members, p.id], roles: { ...g.roles, [p.id]: 'miembro' } } : g);
     log(groupId, 'miembro_agregado', null, { nombre: name });
@@ -163,4 +170,53 @@ export const createDemoBackend = (onExit: () => void): Server => ({
   async acceptLegal() {},
   async deleteAccount() { onExit(); }, // en la demostración, borrar es volver a empezar
   async signOut() { onExit(); },
+  async updateGroup(groupId, x) {
+    groups = groups.map(g => g.id !== groupId ? g : {
+      ...g, ...(x.name !== undefined && { name: x.name }), ...(x.budget !== undefined && { budget: x.budget }),
+      ...(x.simplify !== undefined && { simplify: x.simplify }), ...(x.photoPath !== undefined && { photoPath: x.photoPath }),
+      ...(x.archived !== undefined && { archivedAt: x.archived ? now() : null }),
+      ...(x.startsOn !== undefined && { startsOn: x.startsOn }), ...(x.endsOn !== undefined && { endsOn: x.endsOn }),
+    });
+    log(groupId, 'grupo_editado', null, { ...x });
+  },
+  async setMemberRole(groupId, profileId, role) {
+    groups = groups.map(g => g.id === groupId ? { ...g, roles: { ...g.roles, [profileId]: role } } : g);
+  },
+  async removeMember(groupId, profileId) {
+    groups = groups.map(g => g.id === groupId ? { ...g, members: g.members.filter(m => m !== profileId) } : g);
+    log(groupId, 'miembro_quitado', null, { nombre: profiles[profileId]?.name });
+  },
+  async renamePlaceholder(_groupId, profileId, name) { profiles = { ...profiles, [profileId]: { ...profiles[profileId], name: name.trim() } }; },
+  async leaveGroup(groupId) {
+    log(groupId, 'salio');
+    groups = groups.filter(g => g.id !== groupId);
+  },
+  async createFund(groupId) {
+    const found = Object.values(profiles).find(p => p.fundOf === groupId);
+    if (found) return found.id;
+    const f: Profile = { id: uid('f'), userId: null, name: 'Fondo común', email: null, payout: null, username: null, deletedAt: null, fundOf: groupId };
+    profiles = { ...profiles, [f.id]: f };
+    groups = groups.map(g => g.id === groupId ? { ...g, members: [...g.members, f.id], roles: { ...g.roles, [f.id]: 'miembro' } } : g);
+    log(groupId, 'fondo_creado');
+    return f.id;
+  },
+  async catchUpRecurring() { return 0; },
+  async addItem(groupId, name) {
+    const it: ListItem = { id: uid('l'), groupId, name: name.trim(), addedBy: 'me', doneBy: null, doneAt: null, createdAt: now() };
+    items = [...items, it];
+    return it.id;
+  },
+  async toggleItem(id) { items = items.map(i => i.id === id ? { ...i, doneBy: i.doneAt ? null : 'me', doneAt: i.doneAt ? null : now() } : i); },
+  async deleteItem(id) { items = items.filter(i => i.id !== id); },
+  async uploadPhoto(path, file) { photos.set(path, file.uri ?? ''); },
+  async photoUrl(path) { return photos.get(path) ?? ''; },
+  async setExpensePhoto(expenseId, path) { expenses = expenses.map(e => e.id === expenseId ? { ...e, photoPath: path } : e); },
+  async savePushToken() {},
+  async deletePushToken() {},
+  // así se ve un recibo leído (en la demostración no se manda la foto a ningún lado)
+  async scanReceipt(): Promise<ScanResult> {
+    await new Promise(r => setTimeout(r, 900));
+    return { merchant: 'Adrian Tropical', date: null, tax: 18, tip: 10, total: null,
+      items: [{ name: 'Mofongo de chicharrón', price: 59500 }, { name: 'Pechurina empanizada', price: 64500 }, { name: 'Jugo de chinola', price: 22000 }, { name: 'Presidente grande', price: 32500 }] };
+  },
 });

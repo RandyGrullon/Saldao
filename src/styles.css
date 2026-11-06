@@ -135,7 +135,7 @@ h1 { font-family: var(--display); font-size: 27px; font-weight: 700; letter-spac
 .center { text-align: center; }
 .head { display: grid; gap: 6px; padding: 4px 0 2px; }
 .head .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 15px; font-weight: 500; color: var(--muted); }
-.big { font-family: var(--display); font-size: 40px; font-weight: 700; line-height: 1.05; letter-spacing: -0.04em; }
+.big { font-family: var(--display); font-size: min(40px, 10.2vw); font-weight: 700; line-height: 1.05; letter-spacing: -0.04em; }
 .big .money { font-weight: inherit; letter-spacing: inherit; }
 .lbl { font-size: 15px; color: var(--muted); }
 .pos, .pos .money { color: var(--ok); }
@@ -446,6 +446,72 @@ a.row { color: inherit; text-decoration: none; }
 .toast:not(:has(button)) { padding-right: 18px; }
 
 /* ── movimiento: entradas suaves, esqueletos y la barra de carga ── */
+/* ── las 20 mejoras ── */
+.bar-actions { display: inline-flex; align-items: center; gap: 4px; }
+.title-row .bar-actions { gap: 10px; }
+.chip.on { background: var(--accent-soft); border-color: var(--accent-ink); color: var(--accent-ink); }
+.list-link { display: flex; }
+.list-link .faint, .row .faint { color: var(--faint); }
+/* presupuesto: barra del mes, ámbar cerca del tope y coral al pasarse */
+.budget { display: grid; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--surface-2); }
+.budget p { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted); }
+.budget p .money { color: var(--fg); font-size: 14px; }
+.budget .s { color: var(--muted); }
+.bar-t { position: relative; display: block; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar-t > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); transition: width 500ms var(--ease-out); }
+.budget.near .bar-t > span { background: var(--warn); }
+.budget.over .bar-t > span { background: var(--danger); }
+.budget.over .s { color: var(--danger); }
+/* resumen del mes */
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.month-nav h1 { text-align: center; font-size: 22px; }
+.round:disabled { opacity: .35; }
+.bars { display: grid; gap: 14px; padding: 20px 22px; }
+.bars li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px; }
+.bar-l { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.bars .bar-t { grid-column: 1 / -1; }
+/* fondo común y recordatorios */
+.fund .t .money { font-family: var(--display); font-size: 22px; }
+.remind ul { display: grid; gap: 12px; }
+.remind li { display: flex; align-items: center; gap: 12px; }
+.remind .main .t { white-space: normal; }
+/* lista de compras */
+.box-btn { flex: none; width: var(--touch); height: var(--touch); display: grid; place-items: center; margin: -8px; }
+.box-btn .box { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; color: var(--accent-fg); }
+.box-btn.on .box { background: var(--accent); border-color: var(--accent); }
+.t.done { text-decoration: line-through; color: var(--muted); }
+/* fotos: la del grupo, el comprobante y la que se adjunta al anotar */
+.g-photo { flex: none; border-radius: 12px; object-fit: cover; background: var(--surface-2); }
+.head .g-photo { border-radius: 18px; }
+.group-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.receipt { display: block; border-radius: 16px; overflow: hidden; background: var(--surface-2); }
+.receipt img { display: block; width: 100%; max-height: 420px; object-fit: contain; }
+.attach { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 16px; background: var(--surface); }
+.attach img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; }
+.scan-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.scan.small { flex-direction: column; justify-content: center; gap: 4px; min-width: 84px; font-size: 13px; }
+.scan:disabled { opacity: .6; }
+.why-note { margin: 0 14px 12px; padding: 12px; border-radius: 16px; background: var(--surface-2); font-size: 14px; }
+/* interruptores en filas (avisos, bloqueo, simplificar) */
+.row.toggle { cursor: pointer; }
+.row.toggle .main .s { white-space: normal; }
+.row.toggle input { flex: none; appearance: none; -webkit-appearance: none; width: 50px; height: 30px; border-radius: 15px; background: var(--line); position: relative; transition: background-color 180ms; margin: 0; }
+.row.toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--fg); transition: transform 200ms var(--ease-out); }
+.row.toggle input:checked { background: var(--accent); }
+.row.toggle input:checked::after { transform: translateX(20px); background: var(--accent-fg); }
+.row.toggle input:disabled { opacity: .5; }
+.member { flex-wrap: wrap; row-gap: 8px; }
+.member .main { flex: 1 1 150px; }
+.member-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.btn.danger.sm { background: var(--danger-soft); color: var(--danger); }
+.ended { border: 1.5px solid var(--warn); }
+.ended h2 { color: var(--warn); }
+.form .chips .chip input { color: var(--fg); }
+/* QR para cobrar: blanco siempre (las cámaras lo leen mejor) */
+.qr { width: min(280px, 80%); justify-self: center; padding: 14px; border-radius: 22px; background: #fff; }
+.qr svg { display: block; width: 100%; height: auto; }
+.qr-text { white-space: pre-line; text-align: center; color: var(--muted); font-size: 15px; }
+
 /* ── conexión: sin señal, por enviar o no guardado ── */
 .sync-wrap { position: absolute; z-index: 3; left: 0; right: 0; bottom: calc(var(--tabbar-h) + var(--sab) + 10px); display: flex; justify-content: center;
   padding: 0 16px; pointer-events: none; }
