@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
-  debts, fdate, friendBal, friends, groupOf, listOf, nets, parseMoney, plural, recordPay, reminderText, run, short, simplify, whyItems,
+  debts, fdate, friendBal, friends, groupOf, isFund, listOf, nets, parseMoney, plural, recordPay, reminderText, run, short, simplify, whyItems, xferTitle,
   type Id, type Snapshot, type Transfer,
 } from '@saldao/core';
 import { buzz, errMsg, go } from '../lib/nav';
@@ -26,7 +26,7 @@ export function XferRow({ t, groupId }: { t: Transfer; groupId?: Id }) {
   const its = whyItems(s, t.to, t.from, groupId);
   const pend = its.filter(it => it.left && !it.e.isPayment), over = its.find(it => it.left && it.e.isPayment);
   const since = pend.map(it => it.e.date).sort()[0];
-  const title = t.from === s.me ? `Le debes a ${short(s, t.to)}` : t.to === s.me ? `${short(s, t.from)} te debe` : `${short(s, t.from)} le debe a ${short(s, t.to)}`;
+  const title = xferTitle(s, t), fromFund = isFund(s, t.from), toFund = isFund(s, t.to);
   const gotPaid = async () => {
     try {
       let ids: Id[] = [];
@@ -56,12 +56,13 @@ export function XferRow({ t, groupId }: { t: Transfer; groupId?: Id }) {
       {open && (
         <Animated.View entering={ANIM ? FadeIn.duration(260) : undefined} style={{ marginHorizontal: 14, marginBottom: 12 }}>
           <List bg={c.surface2} inset={12} style={{ borderRadius: 16 }}>
-            {its.map(it => <WhyRow key={it.e.id} it={it} a={t.to} b={t.from} showGroup={!groupId} bg={c.surface} />)}
+            {its.length ? its.map(it => <WhyRow key={it.e.id} it={it} a={t.to} b={t.from} showGroup={!groupId} bg={c.surface} />)
+              : <View style={{ padding: 12 }}><Txt s={14} c="muted">Con las deudas simplificadas este pago sale de los saldos de todo el grupo, no de gastos entre ustedes dos.</Txt></View>}
           </List>
         </Animated.View>
       )}
-      {t.from === s.me && <View style={x.act}><Btn title="Pagar" kind="primary" size="sm" onPress={() => go.pay(t.to, t.amount, groupId)} /></View>}
-      {t.to === s.me && <View style={x.act}>
+      {t.from === s.me && <View style={x.act}><Btn title={toFund ? 'Aportar' : 'Pagar'} kind="primary" size="sm" onPress={() => go.pay(t.to, t.amount, groupId, toFund)} /></View>}
+      {t.to === s.me && !fromFund && <View style={x.act}>
         <Btn title="Recordar" size="sm" onPress={() => remind(s, t.from, t.amount)} />
         <Btn title="Me pagó" size="sm" onPress={gotPaid} />
       </View>}
@@ -107,9 +108,10 @@ const CloseLink = () => {
 };
 
 export function PaySheet() {
-  const { to, amount, groupId } = useLocalSearchParams<{ to: string; amount: string; groupId?: string }>();
+  const { to, amount, groupId, fondo } = useLocalSearchParams<{ to: string; amount: string; groupId?: string; fondo?: string }>();
+  const contribution = !!fondo;
   const s = useS(), c = useC(), toast = useToast(), p = s.profiles[to];
-  const [val, setVal] = useState((Number(amount) / 100).toFixed(2));
+  const [val, setVal] = useState(Number(amount) ? (Number(amount) / 100).toFixed(2) : '');
   const [method, setMethod] = useState<'transferencia' | 'efectivo'>('transferencia');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -122,28 +124,28 @@ export function PaySheet() {
       let ids: Id[] = [];
       await run(async b => { ids = await recordPay(b, s, s.me, to, amt, groupId || undefined, method); });
       buzz(); go.back();
-      toast(`Pago registrado. ${short(s, to)} debe confirmarlo.`, () => { run(b => Promise.all(ids.map(id => b.deleteExpense(id)))).catch(e => toast(errMsg(e))); });
+      toast(contribution ? 'Aporte anotado' : `Pago registrado. ${short(s, to)} debe confirmarlo.`, () => { run(b => Promise.all(ids.map(id => b.deleteExpense(id)))).catch(e => toast(errMsg(e))); });
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   const copy = () => Clipboard.setStringAsync(p.payout!).then(() => toast('Cuenta copiada'), () => toast('No se pudo copiar'));
   return (
-    <Sheet head={<SheetHead title={`Pagar a ${short(s, to)}`} />}>
+    <Sheet head={<SheetHead title={contribution ? 'Aportar al fondo común' : `Pagar a ${short(s, to)}`} />}>
       <View style={x.amountIn}>
         <Txt f="semi" s={20} c="muted">RD$</Txt>
         <TextInput value={val} onChangeText={setVal} keyboardType="decimal-pad" selectTextOnFocus accessibilityLabel="Monto a pagar"
           style={[x.amountField, { color: c.fg, fontFamily: F.display }]} />
       </View>
-      <Section>
+      {!contribution && <Section>
         <H2>Dónde pagarle a {short(s, to)}</H2>
         {p.payout ? <>
           <Txt f="semi" selectable>{p.payout}</Txt><Txt s={15} c="muted">{p.name}</Txt>
           <Btn title="Copiar cuenta" icon="copy" size="sm" style={{ alignSelf: 'flex-start' }} onPress={copy} />
         </> : <Txt s={15} c="muted">{short(s, to)} todavía no ha puesto sus datos de cobro. Pídeselos o págale en efectivo.</Txt>}
-      </Section>
+      </Section>}
       <Seg label="Cómo pagas" value={method} onChange={setMethod} options={[['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']]} />
       {err ? <Txt f="medium" s={15} c="danger">{err}</Txt> : null}
-      <Btn title={busy ? 'Guardando…' : 'Registrar pago'} kind="primary" size="lg" disabled={busy} onPress={save} />
-      <Note center>A {short(s, to)} le aparece en Actividad para que confirme que le llegó.</Note>
+      <Btn title={busy ? 'Guardando…' : contribution ? 'Registrar aporte' : 'Registrar pago'} kind="primary" size="lg" disabled={busy} onPress={save} />
+      <Note center>{contribution ? 'El aporte queda en el fondo: los gastos del fondo salen de ahí.' : `A ${short(s, to)} le aparece en Actividad para que confirme que le llegó.`}</Note>
     </Sheet>
   );
 }

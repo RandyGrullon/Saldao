@@ -8,6 +8,7 @@ import { buzz, errMsg, go } from '../lib/nav';
 import { useS } from '../lib/store';
 import { F, SIZE, useC } from '../lib/theme';
 import { A, Actions, Btn, Chip, Chips, Field, Finding, LinkBtn, Note, Section, Seg, Sheet, SheetH3, SheetHead } from '../ui/base';
+import { DateChip } from '../ui/choice';
 import { Icon } from '../ui/icons';
 import { Av } from '../ui/kit';
 import { B, H2, Txt } from '../ui/text';
@@ -36,8 +37,10 @@ export function NewGroupSheet() {
   const known = friends(s).filter(p => !s.profiles[p].deletedAt);
   const [newPeople, setNewPeople] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
+  const [from, setFrom] = useState(''), [to, setTo] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const badDates = !!from && !!to && to < from;
   const addDraft = () => { const n = draft.trim(); if (n) { setNewPeople(p => [...p, n]); setDraft(''); buzz(); } };
   const create = async () => {
     setBusy(true); setErr('');
@@ -47,16 +50,24 @@ export function NewGroupSheet() {
         id = await b.createGroup(name.trim(), kind);
         for (const p of picked) await b.addMember(id, p);
         for (const n of newPeople) await b.addPlaceholder(id, n);
+        if (from || to) await b.updateGroup(id, { startsOn: from || null, endsOn: to || null });
       });
       buzz(); router.replace(`/grupo/${id}`);
       toast('Grupo creado. Invita a los demás con el enlace.');
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   return (
-    <Sheet head={<SheetHead title="Nuevo grupo" right={<LinkBtn title="Crear" strong disabled={!name.trim() || busy} onPress={create} />} />}>
+    <Sheet head={<SheetHead title="Nuevo grupo" right={<LinkBtn title="Crear" strong disabled={!name.trim() || busy || badDates} onPress={create} />} />}>
       <Field placeholder="Nombre del grupo" value={name} onChangeText={setName} maxLength={60} returnKeyType="done" accessibilityLabel="Nombre del grupo" autoCapitalize="sentences" />
       <SheetH3>Tipo</SheetH3>
       <Seg label="Tipo de grupo" value={kind} onChange={setKind} options={KINDS} />
+      <SheetH3>Fechas (si es por un tiempo)</SheetH3>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <DateChip title="Desde" prefix="Desde" value={from} onChange={v => { setFrom(v); if (to && v && v > to) setTo(''); }} future empty="Desde…" />
+        <DateChip title="Hasta" prefix="Hasta" value={to} onChange={setTo} future min={from || undefined} empty="Hasta…" />
+      </View>
+      {badDates ? <Txt f="medium" s={15} c="danger">La fecha final va después de la primera.</Txt>
+        : <Note>Un viaje o un evento: al llegar la última fecha, {APP.name} avisa que toca saldar y archivar.</Note>}
       {known.length > 0 && <SheetH3>Personas de tus otros grupos</SheetH3>}
       {known.length > 0 && <Chips>{known.map(p => (
         <Chip key={p} title={short(s, p)} on={picked.includes(p)} left={<Av id={p} size="xs" />}
@@ -66,7 +77,7 @@ export function NewGroupSheet() {
       {newPeople.length > 0 && <Chips>{newPeople.map((n, i) => <Chip key={i} title={`${n} ×`} label={`Quitar a ${n}`} onPress={() => setNewPeople(p => p.filter((_, j) => j !== i))} />)}</Chips>}
       <Note>Puedes cargarle gastos desde ya. Cuando entre con el enlace de invitación, reclama su lugar y ve todo su historial.</Note>
       {err ? <Txt f="medium" s={15} c="danger">{err}</Txt> : null}
-      <Btn title={busy ? 'Creando…' : 'Crear grupo'} kind="primary" size="lg" disabled={!name.trim() || busy} onPress={create} />
+      <Btn title={busy ? 'Creando…' : 'Crear grupo'} kind="primary" size="lg" disabled={!name.trim() || busy || badDates} onPress={create} />
     </Sheet>
   );
 }

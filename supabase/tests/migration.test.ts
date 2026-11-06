@@ -218,8 +218,9 @@ describe('seguridad', () => {
   });
 
   it('a quién avisar solo lo sabe la función de avisos (clave de servicio)', async () => {
-    expect(await runnable('service_role')).toContain('push_targets');
+    expect(await runnable('service_role')).toEqual(expect.arrayContaining(['push_targets', 'forget_push_tokens']));
     expect(await runnable('authenticated')).not.toContain('push_targets');
+    expect(await runnable('authenticated')).not.toContain('forget_push_tokens');
   });
 
   it('nadie escribe directo, salvo comentar y editar su perfil', async () => {
@@ -507,6 +508,8 @@ describe('las 20 mejoras', () => {
     try {
       expect(await all('select token, kind from push_targets($1, $2)', [a, U4.ivo])).toEqual([{ token: 'ExponentPushToken[jan-telefono]', kind: 'expo' }]);
       expect(await all('select token from push_targets($1, $2)', [a, U4.jan])).toEqual([]); // jan no hizo ese movimiento
+      await db.query('select forget_push_tokens($1)', [['ExponentPushToken[jan-telefono]']]);
+      expect(await all('select token from push_targets($1, $2)', [a, U4.ivo])).toEqual([]);
     } finally { await db.exec('reset role'); }
     await expect(q(U4.jan, 'select * from push_targets($1, $2)', [a, U4.jan])).rejects.toThrow(/permission denied/);
   });

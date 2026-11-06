@@ -58,7 +58,7 @@ export function SummaryScreen() {
   const [m, setM] = useState(thisMonth());
   const st = useMemo(() => monthStats(s, m), [s, m]);
   const max = Math.max(1, ...st.byCat.map(c => c.amount));
-  const diff = st.prev ? Math.round(((st.total - st.prev) / st.prev) * 100) : null;
+  const diff = st.prev && st.total ? Math.round(((st.total - st.prev) / st.prev) * 100) : null;
   return (
     <>
       <Bar />

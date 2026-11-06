@@ -1,17 +1,20 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
-  ago, byNewest, canEdit, cat, debts, fdate, fday, friendBal, ftime, groupBal, groupOf, involves, ledger, listOf, mineOf, moneyT, pairVal,
-  pendingInfo, plural, recordPay, run, sharedGroups, short, spent, toBase, type Expense, type Id,
+  ago, budgetUse, byNewest, canEdit, cat, debts, expensePhotoPath, fdate, fday, friendBal, ftime, fundLeft, fundOf, getBackend, groupBal, groupDates,
+  groupEnded, groupOf, groupUpcoming, involves, ledger, listOf, mineOf, moneyT, pairVal, pendingInfo, plural, recordPay, repeatText, run, sharedGroups,
+  short, spent, splitText, toBase, type Id,
 } from '@saldao/core';
+import { pickPhoto } from '../lib/photo';
+import { GroupPhoto, usePhotoUrl } from '../ui/photo';
 import { buzz, errMsg, go } from '../lib/nav';
 import { useS } from '../lib/store';
 import { F, useC } from '../lib/theme';
-import { A, Actions, Btn, Card, Empty, LinkBtn, List, Main, Note, Pill, Sec, Section, StackScreen } from '../ui/base';
+import { A, Actions, Btn, Card, Empty, LinkBtn, List, Main, Note, Pill, Row, Sec, Section, StackScreen } from '../ui/base';
 import { Icon } from '../ui/icons';
-import { AnimMoney, Av, Avs, ExpRow, ItemStatus, Money, PayText, useAct, useBalColor, WhyRow } from '../ui/kit';
+import { AnimMoney, Av, Avs, ExpRow, ItemStatus, Money, PayText, RowIc, useAct, useBalColor, WhyRow } from '../ui/kit';
 import { H1, H2, Txt } from '../ui/text';
 import { useToast } from '../ui/toast';
 import { remind, XferRow } from './settle';
@@ -23,23 +26,52 @@ const Day = ({ title, right }: { title: string; right?: React.ReactNode }) => (
 
 export function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const s = useS(), c = useC(), bal = useBalColor(), g = groupOf(s, id);
+  const s = useS(), c = useC(), bal = useBalColor(), toast = useToast(), g = groupOf(s, id);
   if (!g) return <Gone text="Este grupo ya no existe o saliste de él." />;
-  const list = listOf(s, id).sort(byNewest), me = groupBal(s, id), dts = debts(s, id);
+  const list = listOf(s, id).sort(byNewest), me = groupBal(s, id), dts = debts(s, id), bu = budgetUse(s, id), fund = fundOf(s, id);
+  const people = g.members.filter(m => !s.profiles[m]?.fundOf), pendingItems = s.items.filter(i => i.groupId === id && !i.doneAt).length;
   const days = [...new Set(list.map(e => e.date))];
   return (
-    <StackScreen right={<LinkBtn title="Invitar" icon="users" onPress={() => go.invite(id)} />}>
-      <View style={d.head}><Avs ids={g.members} size="head" ring={c.bg} /><H1>{g.name}</H1><Txt f="medium" s={15} c="muted">{plural(g.members.length, 'persona', 'personas')}</Txt></View>
+    <StackScreen right={<View style={{ flexDirection: 'row' }}><LinkBtn title="Invitar" icon="users" onPress={() => go.invite(id)} /><LinkBtn title="Ajustes" icon="edit" onPress={() => go.groupSettings(id)} /></View>}>
+      <View style={d.head}>{g.photoPath ? <GroupPhoto g={g} size={64} /> : <Avs ids={people} size="head" ring={c.bg} />}<H1>{g.name}</H1>
+        <Txt f="medium" s={15} c="muted">{plural(people.length, 'persona', 'personas')}{groupDates(g) ? ` · ${groupDates(g)}` : ''}{g.archivedAt ? ' · archivado' : ''}{g.simplify ? ' · deudas simplificadas' : ''}</Txt></View>
+      {groupEnded(g) && <Section style={{ borderWidth: 1.5, borderColor: c.warn }}>
+        <Txt f="displaySemi" s={16} color={c.warn}>Terminó el {fdate(g.endsOn!)}</Txt>
+        <Txt s={15} c="muted">{dts.length ? 'Toca saldar las cuentas. Cuando todos estén a mano, archiva el grupo para que no estorbe en la lista.' : 'Todos están a mano: ya se puede archivar.'}</Txt>
+        <Actions>
+          {dts.length > 0 && <Btn title="Saldar" kind="primary" style={A.half} onPress={() => go.settle(id)} />}
+          {g.roles[s.me] === 'admin' && <Btn title="Archivar" style={A.half} onPress={() => run(b => b.updateGroup(id, { archived: true })).then(() => { toast('Grupo archivado'); go.back(); }, e => toast(errMsg(e)))} />}
+        </Actions>
+      </Section>}
+      {groupUpcoming(g) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><Pill>empieza el {fdate(g.startsOn!)}</Pill><Txt s={15} c="muted">Ya pueden ir anotando lo que se paga antes.</Txt></View>}
       <Section style={{ gap: 8 }}>
         <Txt s={15} c="muted">{me > 0 ? 'En este grupo te deben' : me < 0 ? 'En este grupo debes' : 'En este grupo estás a mano'}</Txt>
         <AnimMoney c={Math.abs(me)} sign={me > 0} color={me ? bal(me) : c.fg} />
         <Note>Gastado entre todos: {moneyT(spent(list))} · {dts.length ? plural(dts.length, 'deuda abierta', 'deudas abiertas') : 'nadie le debe a nadie'}</Note>
+        {bu && <View style={[d.budget, { backgroundColor: c.surface2 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}><Txt s={14} c="muted">Presupuesto del mes</Txt>
+            <Txt s={14} c="muted"><Money c={bu.spent} s={14} /> de <Money c={bu.budget} s={14} /></Txt></View>
+          <View style={[d.track, { backgroundColor: c.line }]}><View style={[d.fill, { width: `${Math.min(100, bu.ratio * 100)}%`, backgroundColor: bu.ratio >= 1 ? c.danger : bu.ratio >= 0.8 ? c.warn : c.accent }]} /></View>
+          {bu.ratio >= 0.8 && <Txt s={14} color={bu.ratio >= 1 ? c.danger : c.muted}>{bu.ratio >= 1 ? `Se pasaron por ${moneyT(bu.spent - bu.budget)}.` : `Van por el ${Math.round(bu.ratio * 100)} %: quedan ${moneyT(bu.budget - bu.spent)}.`}</Txt>}
+        </View>}
         <Actions>
           <Btn title="Añadir gasto" icon="plus" kind="primary" size="lg" style={A.full} onPress={() => go.addExpense({ groupId: id })} />
           <Btn title="Saldar" size="lg" style={A.full} disabled={!dts.length} onPress={() => go.settle(id)} />
         </Actions>
       </Section>
-      {g.members.length < 2 && <Section><H2>Falta gente</H2><Txt s={15} c="muted">Invita a los demás con el enlace del grupo o agrégalos por nombre.</Txt>
+      {fund && <Section>
+        <H2>Fondo común</H2>
+        <Txt f="semi">Quedan <Money c={fundLeft(s, id)} s={22} f="display" /></Txt>
+        <Txt s={15} c="muted">Lo que se aportó menos lo que pagó el fondo.</Txt>
+        <Actions>
+          <Btn title="Aportar" kind="primary" size="sm" style={A.half} onPress={() => go.pay(fund, 0, id, true)} />
+          <Btn title="Gasto del fondo" size="sm" style={A.half} onPress={() => go.addExpense({ groupId: id, payer: fund })} />
+        </Actions>
+      </Section>}
+      <Card><Row onPress={() => go.list(id)} label="Lista de compras"><RowIc n="cart" tone="accent" />
+        <Main><Txt f="semi">Lista de compras</Txt><Txt s={14} c="muted">{pendingItems ? plural(pendingItems, 'cosa por comprar', 'cosas por comprar') : 'No falta nada'}</Txt></Main>
+        <Icon n="chevR" color={c.faint} /></Row></Card>
+      {people.length < 2 && <Section><H2>Falta gente</H2><Txt s={15} c="muted">Invita a los demás con el enlace del grupo o agrégalos por nombre.</Txt>
         <Btn title="Invitar" icon="users" style={{ alignSelf: 'flex-start' }} onPress={() => go.invite(id)} /></Section>}
       {dts.length > 0 && <Sec title="Quién le debe a quién" hint="toca para ver por qué" />}
       {dts.length > 0 && <List>{dts.map(t => <XferRow key={t.from + t.to} t={t} groupId={id} />)}</List>}
@@ -82,6 +114,7 @@ export function PersonScreen() {
           {b < 0 && <Btn title="Pagar" kind="primary" size="lg" style={A.full} onPress={() => go.pay(id, -b)} />}
           {b > 0 && <Btn title="Recordar" kind="primary" size="lg" style={A.full} onPress={() => remind(s, id, b)} />}
           {b > 0 && <Btn title="Me pagó" size="lg" style={A.half} onPress={gotPaid} />}
+          {b > 0 && <Btn title="Mi QR" size="lg" style={A.half} onPress={() => go.qr(b, id)} />}
           <Btn title={b ? 'Gasto' : 'Añadir gasto'} icon="plus" kind={b ? 'default' : 'primary'} size="lg" style={b ? A.half : A.full} onPress={() => go.addExpense({ friendId: id })} />
         </Actions>
       </Section>
@@ -133,6 +166,9 @@ export function ExpenseScreen() {
         <Money c={e.amount} cur={e.currency} s={40} f="display" />
         {e.currency !== 'DOP' && <Note>Equivale a {moneyT(toBase(e).total)} · US$ 1 = RD$ {e.fxRate.toFixed(2)} ese día</Note>}
         {e.pending && <Status pill={<Pill>sin enviar</Pill>} text="Guardado en este teléfono: se envía solo cuando haya conexión." />}
+        {e.repeat && !e.deletedAt && <View style={{ gap: 4 }}><Status pill={<Pill tone="ok">{repeatText(e.repeat).toLowerCase()}</Pill>} text="Se anota solo cuando toca." />
+          {editable && <LinkBtn title="Dejar de repetir" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} onPress={() => act(b => b.saveExpense({ ...e, repeat: null }), 'Ya no se repite')} />}</View>}
+        {e.repeatFrom && <Status pill={<Pill>repetido</Pill>} text={`Se anotó solo, como ${s.expenses.find(x => x.id === e.repeatFrom) ? `«${s.expenses.find(x => x.id === e.repeatFrom)!.description}»` : 'el original'}.`} />}
         {e.deletedAt && <Status pill={<Pill tone="warn">borrado</Pill>} text="No cuenta en los saldos." />}
         {e.isPayment && e.paymentStatus === 'pendiente' && !e.deletedAt && <Status pill={<Pill tone="warn">por confirmar</Pill>}
           text={recipient === s.me ? 'Confirma si te llegó.' : `${short(s, recipient!)} todavía no confirma que le llegó.`} />}
@@ -143,7 +179,7 @@ export function ExpenseScreen() {
       {e.deletedAt && editable && <Btn title="Restaurar" kind="primary" size="lg" onPress={() => act(b => b.restoreExpense(id), 'Restaurado')} />}
       <Section>
         <H2>{e.isPayment ? 'Detalle' : 'Quién pagó y cuánto le toca'}</H2>
-        {!e.isPayment && <Note>{modeText(e, k => short(s, k))}</Note>}
+        {!e.isPayment && <Note>{splitText(e, k => short(s, k))}</Note>}
         <View>{people.map((k, i) => {
           const xv = k === s.me || e.isPayment ? 0 : pairVal(e, s.me, k);
           const it = xv ? ledger(s.me, k, listOf(s, e.groupId)).find(l => l.e.id === e.id) : undefined;
@@ -172,6 +208,7 @@ export function ExpenseScreen() {
           ...(e.tip > 0 ? [[`Ley ${e.tip} %`, Math.round(sub * e.tip / 100)] as [string, number]] : [])]} total={e.amount} />
       </Section>}
       {e.note && <Section><H2>Nota</H2><Txt selectable>{e.note}</Txt></Section>}
+      <ReceiptPhoto id={e.id} groupId={e.groupId} path={e.photoPath ?? null} editable={editable && !e.deletedAt} />
       <Section>
         <H2>Comentarios</H2>
         {comments.length ? <View style={{ gap: 14 }}>{comments.map(x => (
@@ -208,16 +245,31 @@ export function Totals({ rows, total, cur }: { rows: [string, number][]; total: 
   );
 }
 
-function modeText(e: Expense, nm: (k: string) => string) {
-  const vals = e.splitParams.vals ?? {};
-  switch (e.splitMode) {
-    case 'equal': return `Partes iguales entre ${Object.keys(e.shares).length}`;
-    case 'percent': return 'Por porcentaje: ' + Object.keys(vals).filter(k => vals[k]).map(k => `${nm(k)} ${vals[k]} %`).join(', ');
-    case 'shares': return 'Por partes: ' + Object.keys(vals).filter(k => vals[k]).map(k => `${nm(k)} ${vals[k]}`).join(', ');
-    case 'items': return `Por lo que consumió cada quien${e.tax || e.tip ? `, con ${[e.tax && `ITBIS ${e.tax} %`, e.tip && `ley ${e.tip} %`].filter(Boolean).join(' y ')} repartidos en proporción` : ''}.`;
-    case 'adjust': return 'Partes iguales con extras';
-    default: return 'Montos exactos';
-  }
+/** La foto del comprobante: verla, cambiarla o quitarla. */
+function ReceiptPhoto({ id, groupId, path, editable }: { id: Id; groupId: Id; path: string | null; editable: boolean }) {
+  const toast = useToast(), url = usePhotoUrl(path);
+  const [busy, setBusy] = useState(false);
+  if (!path && !editable) return null;
+  const change = async () => {
+    try {
+      const p = await pickPhoto(); if (!p) return;
+      setBusy(true);
+      const np = expensePhotoPath(groupId, id), b = getBackend()!;
+      await run(async () => { await b.uploadPhoto(np, { data: p.data, type: 'image/jpeg', uri: p.uri }); await b.setExpensePhoto(id, np); });
+      buzz(); toast('Foto guardada');
+    } catch (e) { toast(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Section>
+      <H2>Comprobante</H2>
+      {path ? (url ? <Image source={{ uri: url }} style={d.receipt} resizeMode="contain" accessibilityLabel="Foto del comprobante" /> : <Note>Cargando la foto…</Note>)
+        : <Note>La factura o la captura de la transferencia, para que nadie tenga dudas.</Note>}
+      {editable && <Actions>
+        <Btn title={busy ? 'Subiendo…' : path ? 'Cambiar foto' : 'Agregar foto'} icon="plus" size="sm" disabled={busy} onPress={change} />
+        {path && <Btn title="Quitar" size="sm" disabled={busy} onPress={() => run(b => b.setExpensePhoto(id, null)).then(() => toast('Foto quitada'), err => toast(errMsg(err)))} />}
+      </Actions>}
+    </Section>
+  );
 }
 
 export { Card };
@@ -231,6 +283,10 @@ const d = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 12 },
   totals: { gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth * 2 },
   tRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  budget: { gap: 6, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16 },
+  track: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  fill: { height: 8, borderRadius: 4 },
+  receipt: { width: '100%', height: 360, borderRadius: 16 },
   composer: { flex: 1, minHeight: 44, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, fontSize: 16 },
   send: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

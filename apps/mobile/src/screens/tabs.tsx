@@ -1,31 +1,37 @@
 import { useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useState, type ReactNode } from 'react';
-import { DevSettings, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { DevSettings, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import {
-  ago, APP, canEdit, fdate, friendBal, friends, groupBal, groupOf, moneyT, myTotals, pendingInfo, plural, PRIVACY_URL, run, short, TERMS_URL,
-  typedUser, USERNAME, USERNAME_RULE, visibleGroups, type Activity, type Group, type Snapshot,
+  ago, APP, archivedGroups, canEdit, exportCsv, exportHtml, exportName, fdate, friendBal, friends, groupBal, groupDates, groupEnded, groupOf, monthName,
+  monthStats, moneyT, myTotals, overdue, pendingInfo, plural, PRIVACY_URL, run, short, TERMS_URL, thisMonth, typedUser, USERNAME, USERNAME_RULE,
+  visibleGroups, type Activity, type Group, type Snapshot,
 } from '@saldao/core';
+import { shareCsv, sharePdf } from '../lib/files';
+import { disableLock, enableLock, lockOn, lockSupported } from '../lib/lock';
+import { disablePush, enablePush, pushOn, pushUnavailable } from '../lib/push';
+import { GroupPhoto, KIND_IC } from '../ui/photo';
+import { remind } from './settle';
 import { DEMO } from '../lib/connect';
 import { buzz, errMsg, go } from '../lib/nav';
 import { useS, useSync } from '../lib/store';
 import { SIZE, useC, useTheme, type ThemeMode } from '../lib/theme';
 import { useUnread } from '../lib/unread';
 import { A, Actions, Btn, Card, Empty, Field, Label, LinkBtn, List, Main, Note, Row, Sec, Section, Seg, SplitStatus, TabScreen, TitleRow } from '../ui/base';
-import { Icon, type IconName } from '../ui/icons';
+import { Icon } from '../ui/icons';
 import { AnimMoney, Av, BalText, Finding, Impact, Money, PayText, RowIc, useAct, useBalColor } from '../ui/kit';
 import { B, H2, Txt } from '../ui/text';
 import { useToast } from '../ui/toast';
 
 const KIND: Record<string, string> = { casa: 'Casa', viaje: 'Viaje', pareja: 'Pareja', otro: 'Grupo', directo: 'Entre dos' };
-const KIND_IC: Record<string, IconName> = { casa: 'home', viaje: 'compass', pareja: 'heart', otro: 'users', directo: 'swap' };
-
 export function GroupRow({ g }: { g: Group }) {
   const s = useS();
+  const n = g.members.filter(m => !s.profiles[m]?.fundOf).length, dates = groupDates(g);
   return (
     <Row onPress={() => go.group(g.id)} label={g.name}>
-      <RowIc n={KIND_IC[g.kind]} tone="accent" />
-      <Main><Txt f="semi" lines={1}>{g.name}</Txt><Txt s={14} c="muted">{KIND[g.kind]} · {plural(g.members.length, 'persona', 'personas')}</Txt></Main>
+      {g.photoPath ? <GroupPhoto g={g} size={40} /> : <RowIc n={KIND_IC[g.kind]} tone="accent" />}
+      <Main><Txt f="semi" lines={1}>{g.name}</Txt>
+        <Txt s={14} c="muted" lines={1}>{dates ? `${dates}${groupEnded(g) ? ' · terminó' : ''}` : `${KIND[g.kind]} · ${plural(n, 'persona', 'personas')}`}</Txt></Main>
       <BalText c={groupBal(s, g.id)} />
     </Row>
   );
@@ -49,7 +55,7 @@ export function Home() {
   const people = friends(s).map(p => ({ p, b: friendBal(s, p).b, i: pendingInfo(s, p) })).sort((a, b) => b.b - a.b);
   const top = people[0]?.b > 0 ? people[0] : null;
   const owe = people.filter(x => x.b < 0).sort((a, b) => a.b - b.b)[0];
-  const groups = visibleGroups(s);
+  const groups = visibleGroups(s), late = overdue(s), month = monthStats(s);
   return (
     <TabScreen>
       <TitleRow sub={todayLabel()} title={`Hola, ${s.profiles[s.me].name.split(' ')[0]}`}
@@ -74,6 +80,16 @@ export function Home() {
           </Actions>
         </Section>
       ) : null}
+      {late.length > 0 && <Section>
+        <H2>Para cobrar</H2>
+        {late.slice(0, 3).map(x => (
+          <View key={x.p} style={h.late}><Av id={x.p} size="sm" />
+            <Main><Txt f="semi">{short(s, x.p)} te debe {moneyT(x.amount)}</Txt><Txt s={14} c="muted">sin saldar hace {x.days} días</Txt></Main>
+            <Btn title="Recordar" size="sm" onPress={() => remind(s, x.p, x.amount)} /></View>))}
+      </Section>}
+      {(groups.length > 0 || people.length > 0) && <Card><Row onPress={go.summary} label="Resumen del mes"><RowIc n="cal" tone="accent" />
+        <Main><Txt f="semi">Tu {monthName(thisMonth()).split(' ')[0]}</Txt><Txt s={14} c="muted">Tu parte de lo gastado: {moneyT(month.total)}</Txt></Main>
+        <Icon n="chevR" color={c.faint} /></Row></Card>}
       {people.length > 0 && <Sec title="Personas" hint="toca para ver por qué" />}
       {people.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -SIZE.gut }} contentContainerStyle={{ gap: 12, paddingHorizontal: SIZE.gut }}
@@ -101,10 +117,12 @@ export function Home() {
 export function Groups() {
   const s = useS();
   const duo = friends(s).filter(p => s.groups.some(g => g.kind === 'directo' && g.members.includes(p)));
-  const groups = visibleGroups(s);
+  const groups = visibleGroups(s), old = archivedGroups(s), c = useC();
   return (
     <TabScreen>
-      <TitleRow title="Grupos" right={<Btn title="Nuevo" icon="plus" kind="soft" size="sm" onPress={go.newGroup} />} />
+      <TitleRow title="Grupos" right={<View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <Pressable onPress={go.search} accessibilityRole="button" accessibilityLabel="Buscar gastos" style={[h.round, { backgroundColor: c.surface }]}><Icon n="eye" color={c.fg} /></Pressable>
+        <Btn title="Nuevo" icon="plus" kind="soft" size="sm" onPress={go.newGroup} /></View>} />
       {groups.length ? <List>{groups.map(g => <GroupRow key={g.id} g={g} />)}</List> : <FirstRun />}
       {duo.length > 0 && <Sec title="Entre dos" />}
       {duo.length > 0 && <List>{duo.map(p => {
@@ -117,6 +135,8 @@ export function Groups() {
           </Row>
         );
       })}</List>}
+      {old.length > 0 && <Sec title="Archivados" hint="se pueden abrir y desarchivar" />}
+      {old.length > 0 && <List>{old.map(g => <GroupRow key={g.id} g={g} />)}</List>}
     </TabScreen>
   );
 }
@@ -142,6 +162,11 @@ function evText(s: Snapshot, a: Activity): ReactNode {
     case 'pago_registrado': return e ? <><PayText s={s} e={e} /> {moneyT(e.amount)}{where}</> : <>{who} registró un pago</>;
     case 'pago_confirmado': return <>{who} {me ? 'confirmaste' : 'confirmó'} que le llegó el pago{where}</>;
     case 'comentario': return <>{who} {me ? 'comentaste' : 'comentó'} en {desc}: “{String(a.payload.texto ?? '')}”</>;
+    case 'grupo_editado': return <>{who} {me ? 'cambiaste' : 'cambió'} {a.payload.archived === true ? 'el grupo al archivo' : a.payload.name ? `el nombre a «${String(a.payload.name)}»` : a.payload.budget !== undefined ? 'el presupuesto' : a.payload.simplify !== undefined ? 'cómo se saldan las deudas' : a.payload.starts_on !== undefined || a.payload.ends_on !== undefined ? 'las fechas' : 'el grupo'}{where}</>;
+    case 'salio': return <>{who} {me ? 'saliste' : 'salió'} del grupo{where}</>;
+    case 'fondo_creado': return <>{who} {me ? 'creaste' : 'creó'} el fondo común{where}</>;
+    case 'miembro_quitado': return <>{who} {me ? 'quitaste' : 'quitó'} a {String(a.payload.nombre ?? 'alguien')} del grupo{where}</>;
+    default: return <>{who} hizo un cambio{where}</>;
   }
 }
 
@@ -223,6 +248,7 @@ export function Account() {
         <Note>Lo ve la gente de tus grupos cuando te va a pagar, con un botón para copiarlo.</Note>
         <Btn title={busy ? 'Guardando…' : 'Guardar'} kind="primary" disabled={!dirty || !name.trim() || !userOk || busy} onPress={save} />
       </Section>
+      <PhoneExtras />
       <List>
         <View style={{ paddingVertical: 18, paddingHorizontal: 20, gap: 10 }}>
           <Txt f="semi">Tema</Txt>
@@ -236,11 +262,42 @@ export function Account() {
         <Row onPress={() => openPage(TERMS_URL)}><RowIc n="receipt" /><Main><Txt f="semi">Términos de uso</Txt></Main><Icon n="chevR" color={c.faint} /></Row>
         <Row onPress={() => openPage(PRIVACY_URL)}><RowIc n="eye" /><Main><Txt f="semi">Política de privacidad</Txt></Main><Icon n="chevR" color={c.faint} /></Row>
       </List>
+      <List>
+        <Row onPress={() => go.qr()}><RowIc n="share" /><Main><Txt f="semi">Tu código para cobrar</Txt><Txt s={14} c="muted">Un QR con tus datos de pago</Txt></Main><Icon n="chevR" color={c.faint} /></Row>
+        <Row onPress={() => shareCsv(exportName(s), exportCsv(s)).catch(e => toast(errMsg(e)))}><RowIc n="receipt" /><Main><Txt f="semi">Exportar todo a Excel</Txt><Txt s={14} c="muted">Todos tus grupos, en CSV</Txt></Main></Row>
+        <Row onPress={() => sharePdf(exportHtml(s)).catch(e => toast(errMsg(e)))}><RowIc n="copy" /><Main><Txt f="semi">Informe en PDF</Txt><Txt s={14} c="muted">Para compartir o imprimir</Txt></Main></Row>
+      </List>
       {sure ? <SplitStatus ok={false}>Tienes {plural(pending, 'cambio', 'cambios')} sin enviar. Si sales ahora, se pierden.</SplitStatus> : null}
       <Btn title={DEMO ? 'Reiniciar demostración' : sure ? 'Salir igual' : 'Cerrar sesión'} icon="out" kind="danger" size="lg" onPress={signOut} />
       {!DEMO ? <LinkBtn title="Borrar mi cuenta" color={c.danger} style={{ alignSelf: 'center' }} onPress={go.deleteAccount} /> : null}
       {DEMO ? <Txt s={13} c="muted" center>Modo demostración: personas, montos y cuentas son de ejemplo y nada se guarda.</Txt> : null}
     </TabScreen>
+  );
+}
+
+/** Lo de este teléfono: avisos y bloqueo con huella o cara. */
+function PhoneExtras() {
+  const c = useC(), toast = useToast();
+  const [push, setPush] = useState(false), [lock, setLock] = useState(false), [canLock, setCanLock] = useState(false), [busy, setBusy] = useState(false);
+  const why = pushUnavailable();
+  useEffect(() => { pushOn().then(setPush, () => {}); lockOn().then(setLock); lockSupported().then(setCanLock, () => {}); }, []);
+  const toggle = async (on: boolean, yes: () => Promise<unknown>, no: () => Promise<unknown>, set: (v: boolean) => void, okText: string) => {
+    setBusy(true);
+    try { if (on) await yes(); else await no(); set(on); buzz(); toast(on ? okText : 'Desactivado'); } catch (e) { toast(errMsg(e)); } finally { setBusy(false); }
+  };
+  const sw = (value: boolean, onChange: (v: boolean) => void, disabled: boolean) => (
+    <Switch value={value} disabled={disabled} onValueChange={onChange} trackColor={{ true: c.accent, false: c.line }} thumbColor={value ? c.accentFg : c.fg} />);
+  return (
+    <List>
+      <View style={h.pref}>
+        <Main><Txt f="semi">Avisos en este teléfono</Txt><Txt s={14} c="muted">{why ?? 'Gastos nuevos, pagos por confirmar y comentarios.'}</Txt></Main>
+        {sw(push, v => toggle(v, enablePush, disablePush, setPush, 'Avisos activados'), busy || !!why)}
+      </View>
+      {canLock && <View style={h.pref}>
+        <Main><Txt f="semi">Pedir huella o cara al abrir</Txt><Txt s={14} c="muted">Con Face ID o la huella de este teléfono.</Txt></Main>
+        {sw(lock, v => toggle(v, enableLock, disableLock, setLock, 'Bloqueo activado'), busy)}
+      </View>}
+    </List>
   );
 }
 
@@ -256,5 +313,6 @@ const h = StyleSheet.create({
   divider: { width: StyleSheet.hairlineWidth * 2, marginVertical: 6 },
   tile: { width: 172, padding: 16, borderRadius: 20, gap: 2 },
   newPill: { height: 22, paddingHorizontal: 8, borderRadius: 999, justifyContent: 'center' },
+  late: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
   pref: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: SIZE.row, paddingVertical: 10, paddingLeft: 20, paddingRight: 18 },
 });

@@ -58,28 +58,38 @@ export function ChoiceChip<T extends string>({ icon, value, groups, onChange, ti
   );
 }
 
-/** La fecha del gasto: el calendario del teléfono (en Android su diálogo, en iPhone en una hoja). Nunca en el futuro. */
-export function DateChip({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+/**
+ * Una fecha con el calendario del teléfono (en Android su diálogo, en iPhone en una hoja). La del gasto nunca va en el
+ * futuro; las de un grupo (de fecha a fecha) sí, pueden quedar vacías y la de fin no va antes de la de inicio.
+ */
+export function DateChip({ value, onChange, title = 'Fecha', prefix, future, min, empty }: {
+  value: string; onChange: (v: string) => void; title?: string; prefix?: string; future?: boolean; min?: string; empty?: string;
+}) {
   const c = useC();
   const [open, setOpen] = useState(false);
-  const d = new Date(`${value}T12:00:00`), label = value === today() ? 'Hoy' : fday(value);
+  const d = new Date(`${value || min || today()}T12:00:00`);
+  const label = `${prefix ? `${prefix} ` : ''}${!value ? empty ?? 'Elegir' : value === today() ? 'hoy' : fday(value)}`.replace(/^hoy/, 'Hoy');
   const pick = (x?: Date) => { if (x) { onChange(isoDay(x)); buzz(); } };
+  const lim = { maximumDate: future ? undefined : new Date(), minimumDate: min ? new Date(`${min}T12:00:00`) : undefined };
   const press = () => {
-    if (Platform.OS === 'android') DateTimePickerAndroid.open({ value: d, mode: 'date', maximumDate: new Date(), onChange: (ev, x) => { if (ev.type === 'set') pick(x); } });
+    if (Platform.OS === 'android') DateTimePickerAndroid.open({ value: d, mode: 'date', ...lim, onChange: (ev, x) => { if (ev.type === 'set') pick(x); } });
     else setOpen(true);
   };
-  const days = Array.from({ length: 30 }, (_, i) => { const x = new Date(); x.setDate(x.getDate() - i); return isoDay(x); });
+  const days = Array.from({ length: future ? 60 : 30 }, (_, i) => { const x = new Date(); x.setDate(x.getDate() + (future ? i - 14 : -i)); return isoDay(x); })
+    .filter(k => !min || k >= min);
   return (
     <>
-      <Chip title={label} label={`Fecha: ${label}`} onPress={press} left={<View style={{ paddingLeft: 8 }}><Icon n="cal" sm color={c.fg2} /></View>} />
+      <Chip title={label} label={`${title}: ${label}`} onPress={press} on={empty ? !!value : undefined} left={<View style={{ paddingLeft: 8 }}><Icon n="cal" sm color={c.fg2} /></View>} />
       {Platform.OS === 'ios' && (
-        <Bottom open={open} onClose={() => setOpen(false)} title="Fecha">
-          <DateTimePicker value={d} mode="date" display="inline" maximumDate={new Date()} accentColor={c.accentInk} themeVariant={c.isDark ? 'dark' : 'light'}
+        <Bottom open={open} onClose={() => setOpen(false)} title={title}>
+          <DateTimePicker value={d} mode="date" display="inline" {...lim} accentColor={c.accentInk} themeVariant={c.isDark ? 'dark' : 'light'}
             onChange={(_, x) => pick(x)} style={{ alignSelf: 'center' }} />
+          {empty && value ? <LinkBtn title="Quitar la fecha" style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
         </Bottom>
       )}
       {Platform.OS === 'web' && (
-        <Bottom open={open} onClose={() => setOpen(false)} title="Fecha">
+        <Bottom open={open} onClose={() => setOpen(false)} title={title}>
+          {empty && value ? <LinkBtn title="Quitar la fecha" style={{ alignSelf: 'center' }} onPress={() => { onChange(''); setOpen(false); }} /> : null}
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 2 }}>
             {days.map(k => (
               <Pressable key={k} onPress={() => { onChange(k); setOpen(false); }} style={[ch.opt, k === value && { backgroundColor: c.accentSoft }]}>

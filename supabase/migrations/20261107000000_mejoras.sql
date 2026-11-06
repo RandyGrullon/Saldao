@@ -382,6 +382,11 @@ language sql stable security definer set search_path = public as $$
   join private.push_tokens t on t.user_id = pr.user_id
   where a.id = p_activity and a.created_at > now() - interval '1 hour'
 $$;
+-- Las suscripciones que el servicio de avisos dio por muertas (teléfono sin la app, navegador que se dio de baja).
+create function public.forget_push_tokens(p_tokens text[]) returns void
+language sql security definer set search_path = public as $$
+  delete from private.push_tokens where token = any (p_tokens)
+$$;
 
 -- ── 7. recibos escaneados ────────────────────────────────────
 -- Leer un recibo cuesta: hasta 40 por día por persona. La función que los lee lo pregunta antes de mandar la foto.
@@ -395,10 +400,10 @@ end $$;
 revoke execute on function public.update_group(uuid, jsonb), public.set_member_role(uuid, uuid, text), public.leave_group(uuid),
   public.create_fund(uuid), public.catch_up_recurring(), public.add_item(uuid, text), public.toggle_item(uuid), public.delete_item(uuid),
   public.set_expense_photo(uuid, text), public.save_push_token(text, text), public.delete_push_token(text), public.scan_quota(),
-  public.push_targets(bigint, uuid) from public, anon;
+  public.push_targets(bigint, uuid), public.forget_push_tokens(text[]) from public, anon;
 grant execute on function public.update_group(uuid, jsonb), public.set_member_role(uuid, uuid, text), public.leave_group(uuid),
   public.create_fund(uuid), public.catch_up_recurring(), public.add_item(uuid, text), public.toggle_item(uuid), public.delete_item(uuid),
   public.set_expense_photo(uuid, text), public.save_push_token(text, text), public.delete_push_token(text), public.scan_quota() to authenticated;
-revoke execute on function public.push_targets(bigint, uuid) from authenticated;
-grant execute on function public.push_targets(bigint, uuid) to service_role;
+revoke execute on function public.push_targets(bigint, uuid), public.forget_push_tokens(text[]) from authenticated;
+grant execute on function public.push_targets(bigint, uuid), public.forget_push_tokens(text[]) to service_role;
 revoke execute on all functions in schema private from public, anon, authenticated;

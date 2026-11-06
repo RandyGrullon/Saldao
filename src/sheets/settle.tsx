@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { debts, fdate, friendBal, friends, groupOf, listOf, nets, parseMoney, plural, recordPay, reminderText, run, short, simplify, whyItems, type Id, type Snapshot, type Transfer } from '@saldao/core';
+import { debts, fdate, friendBal, friends, groupOf, isFund, listOf, nets, parseMoney, plural, recordPay, reminderText, run, short, simplify, whyItems, xferTitle, type Id, type Snapshot, type Transfer } from '@saldao/core';
 import { Icon } from '../ui/icons';
 import { Av, Money, WhyRow, errMsg, useS } from '../ui/kit';
 import { SheetHead, buzz, useNav } from '../ui/nav';
@@ -19,7 +19,7 @@ export function XferRow({ t, groupId }: { t: Transfer; groupId?: Id }) {
   const its = whyItems(s, t.to, t.from, groupId);
   const open = its.filter(it => it.left && !it.e.isPayment), over = its.find(it => it.left && it.e.isPayment);
   const since = open.map(it => it.e.date).sort()[0];
-  const title = t.from === s.me ? `Le debes a ${short(s, t.to)}` : t.to === s.me ? `${short(s, t.from)} te debe` : `${short(s, t.from)} le debe a ${short(s, t.to)}`;
+  const title = xferTitle(s, t), fromFund = isFund(s, t.from), toFund = isFund(s, t.to);
   const gotPaid = async () => {
     try {
       let ids: Id[] = [];
@@ -40,8 +40,8 @@ export function XferRow({ t, groupId }: { t: Transfer; groupId?: Id }) {
         {its.length ? <ul className="why">{its.map(it => <WhyRow key={it.e.id} it={it} a={t.to} b={t.from} showGroup={!groupId} />)}</ul>
           : <p className="note why-note">Con las deudas simplificadas este pago sale de los saldos de todo el grupo, no de gastos entre ustedes dos.</p>}
       </details>
-      {t.from === s.me && <div className="xfer-act"><button className="btn primary sm tap" onClick={() => nav.openSheet(<PaySheet to={t.to} amount={t.amount} groupId={groupId} />, 'Pagar')}>Pagar</button></div>}
-      {t.to === s.me && <div className="xfer-act">
+      {t.from === s.me && <div className="xfer-act"><button className="btn primary sm tap" onClick={() => nav.openSheet(<PaySheet to={t.to} amount={t.amount} groupId={groupId} contribution={toFund} />, toFund ? 'Aportar' : 'Pagar')}>{toFund ? 'Aportar' : 'Pagar'}</button></div>}
+      {t.to === s.me && !fromFund && <div className="xfer-act">
         <button className="btn sm tap" onClick={() => remind(s, t.from, t.amount)}>Recordar</button>
         <button className="btn sm tap" onClick={gotPaid}>Me pagó</button></div>}
     </li>
@@ -117,7 +117,7 @@ export function PaySheet({ to, amount, groupId, contribution }: { to: Id; amount
             <button key={k} className="tap" role="radio" aria-checked={method === k} onClick={() => setMethod(k)}>{k === 'transferencia' ? 'Transferencia' : 'Efectivo'}</button>
           ))}
         </div>
-        <button className="btn primary block tap" disabled={busy} onClick={save}>{busy ? 'Guardando…' : 'Registrar pago'}</button>
+        <button className="btn primary block tap" disabled={busy} onClick={save}>{busy ? 'Guardando…' : contribution ? 'Registrar aporte' : 'Registrar pago'}</button>
         <p className="note center">{contribution ? 'El aporte queda en el fondo: los gastos del fondo salen de ahí.' : `A ${short(s, to)} le aparece en Actividad para que confirme que le llegó.`}</p>
       </div>
     </>

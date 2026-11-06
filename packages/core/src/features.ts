@@ -4,7 +4,7 @@
 import { create as createQr } from 'qrcode';
 import { cat } from './categories';
 import { friendBal, friends, groupOf, live, listOf, pendingInfo, short } from './derive';
-import { toBase, type Expense, type Id } from './domain';
+import { toBase, type Expense, type Id, type Transfer } from './domain';
 import { fdate, moneyT, today } from './format';
 import { newId } from './queue';
 import type { Snapshot } from './types';
@@ -18,6 +18,12 @@ export const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').to
 export const isFund = (s: Snapshot, id: Id) => !!s.profiles[id]?.fundOf;
 export const fundOf = (s: Snapshot, g: Id): Id | null => groupOf(s, g)?.members.find(m => s.profiles[m]?.fundOf === g) ?? null;
 /** Lo que queda en el fondo: lo que se le aportó menos lo que pagó. */
+/** Cómo se lee una deuda; con el fondo común, lo que el fondo guarda de cada uno o lo que falta aportar. */
+export function xferTitle(s: Snapshot, t: Transfer) {
+  if (isFund(s, t.from)) return t.to === s.me ? 'El fondo te guarda' : `El fondo le guarda a ${short(s, t.to)}`;
+  if (isFund(s, t.to)) return t.from === s.me ? 'Te falta aportar al fondo' : `A ${short(s, t.from)} le falta aportar`;
+  return t.from === s.me ? `Le debes a ${short(s, t.to)}` : t.to === s.me ? `${short(s, t.from)} te debe` : `${short(s, t.from)} le debe a ${short(s, t.to)}`;
+}
 export function fundLeft(s: Snapshot, g: Id): number {
   const f = fundOf(s, g);
   if (!f) return 0;

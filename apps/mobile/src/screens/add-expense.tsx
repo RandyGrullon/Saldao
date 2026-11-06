@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  apportion, cat, CATS, curSym, friends, groupOf, guessCat, itemSplit, moneyT, parseMoney, plural, run, short, split, sum, today, typed,
-  visibleGroups, type Expense, type Id, type Snapshot, type SplitMode,
+  apportion, cat, CATS, curSym, expensePhotoPath, fetchUsdRate, frequentExpenses, friends, fundOf, getBackend, groupOf, guessCat, itemSplit, moneyT,
+  parseMoney, plural, REPEATS, run, short, split, sum, today, typed, visibleGroups, type Expense, type Id, type Snapshot, type SplitMode,
 } from '@saldao/core';
+import { pickPhoto, type Photo } from '../lib/photo';
 import { buzz, errMsg, go } from '../lib/nav';
 import { useS } from '../lib/store';
 import { ANIM, F, R, SIZE, useC } from '../lib/theme';
@@ -19,7 +20,10 @@ import { Txt } from '../ui/text';
 import { useToast } from '../ui/toast';
 import { Totals } from './detail';
 
-const MODES: [SplitMode, string][] = [['equal', 'Iguales'], ['exact', 'Montos'], ['percent', '%'], ['shares', 'Partes'], ['adjust', 'Extra'], ['items', 'Ítems']];
+// «Noches» es «Partes» contado en noches: en un viaje, quien llegó después paga menos hospedaje.
+type Mode = SplitMode | 'nights';
+const MODES: [Mode, string][] = [['equal', 'Iguales'], ['exact', 'Montos'], ['percent', '%'], ['shares', 'Partes'], ['nights', 'Noches'], ['adjust', 'Extra'], ['items', 'Ítems']];
+const modeOf = (e: Expense): Mode => (e.splitMode === 'shares' && e.splitParams.unit === 'noches' ? 'nights' : e.splitMode);
 type ItemDraft = { name: string; price: string; to: Id[] };
 const RATE_KEY = 'saldao:tasa-usd';
 const ones = (ms: Id[]) => Object.fromEntries(ms.map(k => [k, 1]));
@@ -31,9 +35,15 @@ function targetOf(s: Snapshot, groupId: Id) {
   const g = groupOf(s, groupId);
   return g?.kind === 'directo' ? `p:${g.members.find(m => m !== s.me)}` : `g:${groupId}`;
 }
+/** Quienes consumen (el fondo común no). */
 function membersOf(s: Snapshot, target: string): Id[] {
   if (target.startsWith('p:')) return [s.me, target.slice(2)];
-  return groupOf(s, target.slice(2))?.members ?? [s.me];
+  return (groupOf(s, target.slice(2))?.members ?? [s.me]).filter(m => !s.profiles[m]?.fundOf);
+}
+/** Quienes pueden pagar: las personas y, si hay, el fondo común del grupo. */
+function payersOf(s: Snapshot, target: string): Id[] {
+  const f = target.startsWith('g:') ? fundOf(s, target.slice(2)) : null;
+  return f ? [...membersOf(s, target), f] : membersOf(s, target);
 }
 function initVals(e: Expense): Record<Id, string> {
   if (e.splitMode === 'exact') return Object.fromEntries(Object.entries(e.shares).map(([k, v]) => [k, cents2(v)]));
@@ -41,24 +51,28 @@ function initVals(e: Expense): Record<Id, string> {
 }
 
 export function AddExpenseSheet() {
-  const p = useLocalSearchParams<{ groupId?: string; friendId?: string; edit?: string }>();
+  const p = useLocalSearchParams<{ groupId?: string; friendId?: string; edit?: string; payer?: string; desc?: string; cat?: string; clear?: string }>();
   const s = useS(), c = useC(), toast = useToast(), insets = useSafeAreaInsets();
   const edit = p.edit ? s.expenses.find(e => e.id === p.edit) : undefined;
   const first = visibleGroups(s)[0]?.id;
   const [target, setTarget] = useState(edit ? targetOf(s, edit.groupId) : p.friendId ? `p:${p.friendId}` : p.groupId ? targetOf(s, p.groupId) : first ? `g:${first}` : '');
-  const members = membersOf(s, target);
+  const members = membersOf(s, target), payerIds = payersOf(s, target);
   const [step, setStep] = useState<1 | 2>(edit ? 2 : 1);
   const [amt, setAmt] = useState(edit && edit.splitMode !== 'items' ? String(edit.amount / 100) : '');
   const [cur, setCur] = useState(edit?.currency ?? 'DOP');
   const [rate, setRate] = useState(edit && edit.currency !== 'DOP' ? String(edit.fxRate) : '');
-  const [desc, setDesc] = useState(edit?.description ?? '');
-  const [catKey, setCatKey] = useState<string | null>(edit?.category ?? null);
+  const [rateNote, setRateNote] = useState('');
+  const [desc, setDesc] = useState(edit?.description ?? p.desc ?? '');
+  const [catKey, setCatKey] = useState<string | null>(edit?.category ?? p.cat ?? null);
+  const [repeat, setRepeat] = useState(edit?.repeat ?? '');
+  const [photo, setPhoto] = useState<Photo | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [date, setDate] = useState(edit?.date ?? today());
   const [note, setNote] = useState(edit?.note ?? '');
   const [multi, setMulti] = useState(edit ? Object.keys(edit.payers).length > 1 : false);
-  const [payer, setPayer] = useState<Id>(edit ? Object.keys(edit.payers)[0] : s.me);
+  const [payer, setPayer] = useState<Id>(edit ? Object.keys(edit.payers)[0] : p.payer ?? s.me);
   const [payVals, setPayVals] = useState<Record<Id, string>>(edit ? Object.fromEntries(Object.entries(edit.payers).map(([k, v]) => [k, cents2(v)])) : {});
-  const [mode, setMode] = useState<SplitMode>(edit?.splitMode ?? 'equal');
+  const [mode, setMode] = useState<Mode>(edit ? modeOf(edit) : 'equal');
   const [on, setOn] = useState<Record<Id, boolean>>(edit ? Object.fromEntries(Object.keys(edit.shares).map(k => [k, true])) : Object.fromEntries(members.map(k => [k, true])));
   const [vals, setVals] = useState<Record<Id, string>>(edit ? initVals(edit) : {});
   const [items, setItems] = useState<ItemDraft[]>(edit?.items ? edit.items.map(i => ({ name: i.name, price: cents2(i.price), to: i.to })) : []);
@@ -68,6 +82,13 @@ export function AddExpenseSheet() {
   const [err, setErr] = useState('');
   // la tasa del dólar que usaste la última vez
   useEffect(() => { if (!edit) AsyncStorage.getItem(RATE_KEY).then(r => { if (r) setRate(x => x || r); }, () => {}); }, [edit]);
+  // en dólares: la tasa de hoy si no hay una escrita
+  useEffect(() => {
+    if (cur === 'DOP' || edit) return;
+    let live = true;
+    fetchUsdRate().then(r => { if (live && r) { setRate(x => x || String(r)); setRateNote(`Tasa de hoy: RD$ ${r.toFixed(2)} (ExchangeRate-API)`); } });
+    return () => { live = false; };
+  }, [cur, edit]);
 
   if (!target) return (
     <Sheet head={<SheetHead title="Nuevo gasto" />}>
@@ -81,12 +102,13 @@ export function AddExpenseSheet() {
   const parsedItems = items.map(i => ({ name: i.name.trim() || 'Ítem', price: parseMoney(i.price), to: i.to }));
   const ix = itemSplit(parsedItems, tax ? 18 : 0, tip ? 10 : 0);
   const total = mode === 'items' ? ix.total : parseMoney(amt || '0');
+  const splitMode: SplitMode = mode === 'nights' ? 'shares' : mode;
   const r = mode === 'items'
     ? { shares: ix.shares, ok: parsedItems.length > 0 && !ix.unassigned && parsedItems.every(i => i.price > 0),
         status: !parsedItems.length ? 'Agrega los ítems del recibo' : parsedItems.some(i => i.price <= 0) ? 'A un ítem le falta el precio'
           : ix.unassigned ? `${plural(ix.unassigned, 'ítem', 'ítems')} sin nadie asignado` : 'Cuadra con el recibo' }
-    : split(mode, total, members, { on, vals }, fmt);
-  const payers: Record<Id, number> = multi ? clean(Object.fromEntries(members.map(k => [k, parseMoney(payVals[k] ?? '')]))) : { [payer]: total };
+    : (() => { const x = split(splitMode, total, members, { on, vals }, fmt); return mode === 'nights' ? { ...x, status: x.ok ? x.status.replace('partes', 'noches') : 'Pon cuántas noches estuvo cada quien' } : x; })();
+  const payers: Record<Id, number> = multi ? clean(Object.fromEntries(payerIds.map(k => [k, parseMoney(payVals[k] ?? '')]))) : { [payer]: total };
   const paidDiff = total - sum(payers);
   const rateN = cur === 'DOP' ? 1 : Number(rate.replace(',', '.'));
   const okRate = cur === 'DOP' || rateN > 0;
@@ -102,12 +124,12 @@ export function AddExpenseSheet() {
       return a === '0' ? k : a + k;
     });
   };
-  const pickMode = (m: SplitMode, ms = members, t = parseMoney(amt || '0')) => {
+  const pickMode = (m: Mode, ms = members, t = parseMoney(amt || '0')) => {
     setMode(m);
     if (m === 'equal') setOn(Object.fromEntries(ms.map(k => [k, true])));
     if (m === 'exact') { const a = apportion(t, ones(ms)); setVals(Object.fromEntries(ms.map(k => [k, cents2(a[k])]))); }
     if (m === 'percent') { const a = apportion(10000, ones(ms)); setVals(Object.fromEntries(ms.map(k => [k, String(a[k] / 100)]))); }
-    if (m === 'shares') setVals(Object.fromEntries(ms.map(k => [k, '1'])));
+    if (m === 'shares' || m === 'nights') setVals(Object.fromEntries(ms.map(k => [k, '1'])));
     if (m === 'adjust') setVals({});
     if (m === 'items' && !items.length) setItems([{ name: '', price: '', to: [...ms] }]);
   };
@@ -118,27 +140,62 @@ export function AddExpenseSheet() {
     pickMode(mode, ms);
   };
   const setItem = (i: number, patch: Partial<ItemDraft>) => setItems(its => its.map((it, j) => (j === i ? { ...it, ...patch } : it)));
+  // un gasto de siempre: lo mismo de la última vez (grupo, monto, categoría y cómo se dividió)
+  const useTemplate = (e: Expense) => {
+    buzz();
+    setTarget(targetOf(s, e.groupId)); setDesc(e.description); setCatKey(e.category); setCur(e.currency);
+    if (e.currency !== 'DOP') setRate(String(e.fxRate));
+    setAmt(e.splitMode === 'items' ? '' : String(e.amount / 100)); setMode(modeOf(e)); setVals(initVals(e));
+    setOn(Object.fromEntries(Object.keys(e.shares).map(k => [k, true])));
+    setMulti(Object.keys(e.payers).length > 1); setPayer(Object.keys(e.payers)[0]);
+    setPayVals(Object.fromEntries(Object.entries(e.payers).map(([k, v]) => [k, cents2(v)])));
+    if (e.items) setItems(e.items.map(i => ({ name: i.name, price: cents2(i.price), to: i.to })));
+  };
+  const scan = async () => {
+    try {
+      const ph = await pickPhoto(); if (!ph) return;
+      setScanning(true);
+      const res = await getBackend()!.scanReceipt(ph.base64, 'image/jpeg');
+      if (!res.items.length) throw new Error('No encontramos ítems en esa foto. Prueba con más luz o anótalos a mano.');
+      setPhoto(ph);
+      setItems(res.items.map(i => ({ name: i.name, price: cents2(i.price), to: [...members] })));
+      setTax(res.tax > 0); setTip(res.tip > 0);
+      if (!desc.trim() && res.merchant) setDesc(res.merchant);
+      if (res.date && res.date <= today()) setDate(res.date);
+      setMode('items'); setStep(2); buzz();
+      toast(`Leímos ${plural(res.items.length, 'ítem', 'ítems')}: revisa y marca quién comió qué`);
+    } catch (e) { toast(errMsg(e)); } finally { setScanning(false); }
+  };
+  const attach = async () => { try { const ph = await pickPhoto(); if (ph) setPhoto(ph); } catch (e) { toast(errMsg(e)); } };
 
   const save = async () => {
     if (!ok) return;
     setBusy(true); setErr('');
     try {
-      let id = '';
+      let id = '', gid = '';
       await run(async b => {
-        const gid = edit ? edit.groupId : target.startsWith('p:') ? await b.directGroup(target.slice(2)) : target.slice(2);
+        gid = edit ? edit.groupId : target.startsWith('p:') ? await b.directGroup(target.slice(2)) : target.slice(2);
         id = await b.saveExpense({
           id: edit?.id, groupId: gid, description: desc.trim() || cat(catK).name, category: catK, date, currency: cur, amount: total, fxRate: rateN,
-          splitMode: mode, splitParams: mode === 'equal' ? { on: members.filter(k => on[k]) } : mode === 'items' ? {} : { vals: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, Number(v.replace(',', '.')) || 0])) },
+          splitMode, splitParams: mode === 'equal' ? { on: members.filter(k => on[k]) } : mode === 'items' ? {}
+            : { vals: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, Number(v.replace(',', '.')) || 0])), ...(mode === 'nights' && { unit: 'noches' as const }) },
           items: mode === 'items' ? parsedItems : null, tax: mode === 'items' && tax ? 18 : 0, tip: mode === 'items' && tip ? 10 : 0,
-          note: note.trim() || null, repeat: null, payers, shares: clean(r.shares), isPayment: false,
+          note: note.trim() || null, repeat: repeat || null, payers, shares: clean(r.shares), isPayment: false,
         });
+        for (const it of (p.clear ?? '').split(',').filter(Boolean)) await b.deleteItem(it).catch(() => {});
       });
       if (cur !== 'DOP') AsyncStorage.setItem(RATE_KEY, rate).catch(() => {});
       buzz(); go.back();
       toast(edit ? 'Cambios guardados' : 'Gasto guardado', edit ? undefined : () => { run(b => b.deleteExpense(id)).catch(e => toast(errMsg(e))); });
+      if (photo) {
+        const path = expensePhotoPath(gid, id);
+        run(async b => { await b.uploadPhoto(path, { data: photo.data, type: 'image/jpeg', uri: photo.uri }); await b.setExpensePhoto(id, path); })
+          .catch(e => toast(`El gasto quedó, pero la foto no: ${errMsg(e)}`));
+      }
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
 
+  const usual = !edit && !amt && !desc ? frequentExpenses(s) : [];
   const targetName = target.startsWith('p:') ? `Con ${short(s, target.slice(2))}` : groupOf(s, target.slice(2))?.name ?? '';
   const numIn = (value: string, onChangeText: (v: string) => void, label: string, pre = '', suf = '', wide = false) => (
     <View style={[a.numIn, { borderColor: c.line, backgroundColor: c.surface }, wide && { flex: 1, width: undefined }]}>
@@ -172,8 +229,11 @@ export function AddExpenseSheet() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Txt c="muted">RD$ por US$ 1:</Txt>{numIn(rate, setRate, 'Tasa del dólar', '', '', true)}
         </View>
+        {rateNote ? <Note center>{rateNote}</Note> : null}
         {rateN > 0 && parseMoney(amt || '0') > 0 && <Note center>Equivale a {moneyT(Math.round(parseMoney(amt) * rateN))}</Note>}
       </>}
+      {usual.length > 0 && <SheetH3>De siempre</SheetH3>}
+      {usual.length > 0 && <Chips>{usual.map(e => <Chip key={e.id} title={e.description} left={<View style={{ paddingLeft: 8 }}><Icon n={cat(e.category).icon} sm color={c.fg2} /></View>} onPress={() => useTemplate(e)} />)}</Chips>}
       <Field placeholder="¿En qué fue?" value={desc} onChangeText={setDesc} returnKeyType="done" accessibilityLabel="Descripción" autoCapitalize="sentences" />
       <Chips>
         <ChoiceChip icon="users" title="Grupo o persona" value={target} onChange={changeTarget} disabled={!!edit}
@@ -184,12 +244,23 @@ export function AddExpenseSheet() {
         <DateChip value={date} onChange={setDate} />
         <ChoiceChip icon={cat(catK).icon} title="Categoría" value={catK} onChange={setCatKey}
           groups={[{ options: Object.entries(CATS).filter(([k]) => k !== 'pago').map(([k, x]) => [k, x.name] as [string, string]) }]} />
+        {(!edit || !edit.repeatFrom) && <ChoiceChip icon="repeat" title="Se repite" value={repeat} onChange={setRepeat} groups={[{ options: REPEATS.map(([k, l]) => [k, l] as [string, string]) }]} />}
       </Chips>
       <Field placeholder="Nota (opcional)" value={note} onChangeText={setNote} returnKeyType="done" accessibilityLabel="Nota" />
-      <Pressable onPress={() => { pickMode('items'); setStep(2); }} accessibilityRole="button" style={[a.scan, { borderColor: c.line }]}>
-        <Icon n="receipt" color={c.accentInk} />
-        <View style={{ flex: 1 }}><Txt f="semi">Dividir por ítems del recibo</Txt><Txt s={13} c="muted">Cada quien paga lo suyo, con ITBIS y ley repartidos</Txt></View>
-      </Pressable>
+      {!edit && <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable onPress={scan} disabled={scanning} accessibilityRole="button" style={[a.scan, { borderColor: c.line, flex: 1, opacity: scanning ? 0.6 : 1 }]}>
+          <Icon n="receipt" color={c.accentInk} />
+          <View style={{ flex: 1 }}><Txt f="semi">{scanning ? 'Leyendo el recibo…' : 'Escanear el recibo'}</Txt><Txt s={13} c="muted">Una foto y los ítems, el ITBIS y la ley se llenan solos</Txt></View>
+        </Pressable>
+        <Pressable onPress={() => { pickMode('items'); setStep(2); }} accessibilityRole="button" accessibilityLabel="Dividir por ítems a mano" style={[a.scan, { borderColor: c.line, width: 84, flexDirection: 'column', gap: 4, justifyContent: 'center' }]}>
+          <Icon n="edit" color={c.accentInk} /><Txt f="semi" s={13}>A mano</Txt>
+        </Pressable>
+      </View>}
+      {!edit && (photo
+        ? <View style={[a.attach, { backgroundColor: c.surface }]}><Image source={{ uri: photo.uri }} style={a.thumb} />
+            <View style={{ flex: 1 }}><Txt f="semi">Foto del comprobante</Txt><Txt s={14} c="muted">Se sube al guardar</Txt></View>
+            <LinkBtn title="Quitar" onPress={() => setPhoto(null)} /></View>
+        : <LinkBtn title="Adjuntar foto del comprobante" icon="plus" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} onPress={attach} />)}
     </Sheet>
   );
 
@@ -200,10 +271,10 @@ export function AddExpenseSheet() {
       <View style={a.recap}><Txt f="semi" c="muted" lines={1} style={{ flex: 1 }}>{desc.trim() || cat(catK).name} · {targetName}</Txt><Money c={total} cur={cur} s={22} /></View>
       <SheetH3>Pagó</SheetH3>
       <Chips>
-        {members.map(k => <Chip key={k} title={short(s, k)} on={!multi && payer === k} left={<Av id={k} size="xs" />} onPress={() => { setMulti(false); setPayer(k); buzz(); }} />)}
+        {payerIds.map(k => <Chip key={k} title={short(s, k)} on={!multi && payer === k} left={<Av id={k} size="xs" />} onPress={() => { setMulti(false); setPayer(k); buzz(); }} />)}
         <Chip title="Varios" on={multi} onPress={() => setMulti(true)} />
       </Chips>
-      {multi && <List>{members.map(k => (
+      {multi && <List>{payerIds.map(k => (
         <Row key={k} style={{ minHeight: 60 }}><Av id={k} /><Main><Txt f="semi">{short(s, k)}</Txt></Main>
           {numIn(payVals[k] ?? '', v => setPayVals(x => ({ ...x, [k]: v })), `Lo que pagó ${short(s, k)}`, curSym(cur))}</Row>))}</List>}
       <SheetH3>Cómo se divide</SheetH3>
@@ -257,10 +328,10 @@ export function AddExpenseSheet() {
                 : mode === 'adjust' ? numIn(vals[k] ?? '', v => setVals(x => ({ ...x, [k]: v })), short(s, k), '+')
                 : (
                   <View style={[a.stepper, { backgroundColor: c.surface2 }]}>
-                    <Pressable style={a.stepBtn} accessibilityLabel={`Menos partes para ${short(s, k)}`}
+                    <Pressable style={a.stepBtn} accessibilityLabel={`Menos ${mode === 'nights' ? 'noches' : 'partes'} para ${short(s, k)}`}
                       onPress={() => { buzz(); setVals(x => ({ ...x, [k]: String(Math.max(0, (Number(x[k]) || 0) - 1)) })); }}><Txt s={22}>−</Txt></Pressable>
                     <Txt f="semi" style={{ minWidth: 24, textAlign: 'center' }}>{vals[k] ?? 0}</Txt>
-                    <Pressable style={a.stepBtn} accessibilityLabel={`Más partes para ${short(s, k)}`}
+                    <Pressable style={a.stepBtn} accessibilityLabel={`Más ${mode === 'nights' ? 'noches' : 'partes'} para ${short(s, k)}`}
                       onPress={() => { buzz(); setVals(x => ({ ...x, [k]: String((Number(x[k]) || 0) + 1) })); }}><Txt s={22}>+</Txt></Pressable>
                   </View>
                 )}
@@ -290,4 +361,6 @@ const a = StyleSheet.create({
   box: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: R.control },
   stepBtn: { width: SIZE.touch, height: SIZE.touch, alignItems: 'center', justifyContent: 'center' },
+  attach: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 16 },
+  thumb: { width: 52, height: 52, borderRadius: 10 },
 });

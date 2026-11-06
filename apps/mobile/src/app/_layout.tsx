@@ -24,7 +24,11 @@ import { errMsg, go } from '../lib/nav';
 import { PhaseCtx, type Phase } from '../lib/phase';
 import { useSnap } from '../lib/store';
 import { ThemeProvider, useTheme } from '../lib/theme';
-import { loadSeen } from '../lib/unread';
+import { loadSeen, useUnread } from '../lib/unread';
+import { lockOn, unlock } from '../lib/lock';
+import { setBadge } from '../lib/push';
+import { AppState } from 'react-native';
+import { Notice } from '../screens/auth';
 import { ToastProvider } from '../ui/toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -81,7 +85,26 @@ function App() {
     return () => clearTimeout(t);
   }, [me]);
 
-  if (!fonts || !themeReady || phase === 'boot') return null;
+  // lo nuevo en Actividad, en el ícono de la app
+  const unread = useUnread(snap);
+  useEffect(() => { setBadge(unread.n); }, [unread.n]);
+  // bloqueo con Face ID o huella: al abrir y al volver después de cinco minutos
+  const [locked, setLocked] = useState<boolean | null>(null);
+  useEffect(() => { lockOn().then(setLocked); }, []);
+  useEffect(() => {
+    let away = 0;
+    const sub = AppState.addEventListener('change', st => {
+      if (st !== 'active') away = Date.now();
+      else if (away && Date.now() - away > 5 * 60_000) lockOn().then(on => { if (on) setLocked(true); });
+    });
+    return () => sub.remove();
+  }, []);
+
+  if (!fonts || !themeReady || phase === 'boot' || locked === null) return null;
+  if (locked && phase === 'ready') return (
+    <Notice title="Saldao está bloqueado" text="Usa Face ID, la huella o el PIN del teléfono para ver tus cuentas."
+      action={{ title: 'Desbloquear', onPress: () => { unlock().then(ok => { if (ok) setLocked(false); }); } }} />
+  );
   const ready = phase === 'ready' && !!snap;
   const legal = ready && !snap!.legalOk;
   const modal = { presentation: 'modal', animation: Platform.OS === 'android' ? 'slide_from_bottom' : undefined } as const;
@@ -106,6 +129,11 @@ function App() {
           <Stack.Screen name="unirse" options={modal} />
           <Stack.Screen name="borrar-cuenta" options={modal} />
           <Stack.Screen name="no-guardados" options={modal} />
+          <Stack.Screen name="lista/[id]" />
+          <Stack.Screen name="resumen" />
+          <Stack.Screen name="buscar" />
+          <Stack.Screen name="qr" options={modal} />
+          <Stack.Screen name="ajustes-grupo" options={modal} />
         </Stack.Protected>
       </Stack>
     </PhaseCtx.Provider>
