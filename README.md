@@ -55,6 +55,41 @@ npm run dev:demo
 
 Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no guarda nada.
 
+## App nativa (iPhone y Android)
+
+La app nativa está en `apps/mobile` (Expo SDK 58, React Native 0.88) y usa el mismo núcleo que la web
+(`packages/core`): las mismas cuentas, la misma cola sin conexión y la misma base. Se ve igual (estilo «De noche»,
+Unbounded y Sora, claro u oscuro) y tiene todas las pantallas de la web: entrar y crear cuenta, Inicio, Grupos,
+Actividad, Cuenta, grupo, persona, gasto, gasto nuevo (con el teclado del monto y las seis formas de dividir),
+saldar, pagar, invitar, unirse, términos y borrar la cuenta.
+
+Hace falta **Node 22.13 o más nuevo** (Expo SDK 58 no funciona bien con Node 20).
+
+1. Copia `apps/mobile/.env.example` como `apps/mobile/.env.local` con los mismos valores de la web, pero con el
+   prefijo `EXPO_PUBLIC_` (`EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY`).
+2. Instala **Expo Go** en tu teléfono (App Store o Google Play).
+3. Arranca:
+
+```bash
+npm run mobile
+```
+
+4. Escanea el código QR que aparece: con la cámara en iPhone y con Expo Go en Android. El teléfono y la computadora
+   tienen que estar en la misma red Wi-Fi.
+
+Para verla con los datos de ejemplo, sin Supabase:
+
+```bash
+npm run mobile:demo
+```
+
+Cómo guarda las cosas: la sesión va en el llavero del teléfono (Keychain en iPhone, Keystore en Android), cifrada
+por el sistema; la última foto y la cola sin conexión, en el almacenamiento de la app. Lo pendiente sale solo al
+volver la señal o al volver a la app.
+
+Para entrar con Google desde la app nativa, cuando lo actives en Supabase, agrega a *Redirect URLs* `saldao://**`
+(la app instalada) y `exp://**` (Expo Go).
+
 ## Conectar Supabase
 
 1. Copia `.env.example` como `.env.local` y pon `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (Project Settings → API). La anon key es pública: la seguridad la dan las reglas RLS.
@@ -149,6 +184,7 @@ Así, leer una columna cerrada, llamar una función interna o escribir donde la 
 ## Estructura
 
 ```
+apps/mobile/         la app nativa (Expo): src/app son las rutas, src/screens las pantallas, src/ui las piezas
 packages/core/       lo que comparten la web y la app nativa (sin navegador ni React)
   src/app.ts         nombre de la app (un solo lugar)
   src/domain.ts      reglas de dinero, sin dependencias

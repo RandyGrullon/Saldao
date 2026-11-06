@@ -10,3 +10,10 @@ supabase/.temp
 supabase/.branches
 .claude/
 .vercel
+
+# app nativa (Expo): lo que genera la herramienta
+apps/mobile/.expo
+apps/mobile/dist
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/expo-env.d.ts

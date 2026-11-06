@@ -27,7 +27,10 @@ export const monShort = (s: string) => MES[D(s).getMonth()];
 export const fdate = (s: string) => `${dayNum(s)} ${monShort(s)}`;
 export const fday = (s: string) => { const d = D(s); const t = `${DIA[d.getDay()]} ${d.getDate()} ${MES[d.getMonth()]}`; return t[0].toUpperCase() + t.slice(1); };
 export const ftime = (s: string) => { const d = D(s); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
-export const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** YYYY-MM-DD en hora local (a mano: el formato regional cambia entre navegadores y teléfonos). */
+export const isoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+export const today = () => isoDay(new Date());
 
 export function ago(s: string, now = Date.now()) {
   const m = (now - D(s).getTime()) / 60000;

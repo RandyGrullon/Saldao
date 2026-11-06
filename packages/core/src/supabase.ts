@@ -96,12 +96,16 @@ export async function resendConfirmation(email: string) {
   const { error } = await sb().auth.resend({ type: 'signup', email, options: { emailRedirectTo: conf().redirectTo } });
   if (error) throw authError(error);
 }
-export async function signInWithGoogle() {
-  // Si Google no está activado, Supabase redirige a una página de error en JSON: mejor avisar antes de salir de la app.
+/** Si Google no está activado, Supabase redirige a una página de error en JSON: mejor avisar antes de salir de la app. */
+export async function requireGoogle() {
   const c = conf();
   const settings = await fetch(`${c.url}/auth/v1/settings`, { headers: { apikey: c.anonKey } }).then(r => r.json()).catch(() => null);
   if (settings && !settings.external?.google) throw new Error('Entrar con Google todavía no está activado. Usa tu correo y contraseña.');
-  const { error } = await sb().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: c.redirectTo } });
+}
+/** En la web: la página se va a Google y vuelve con la sesión. (La app nativa abre su propio navegador seguro.) */
+export async function signInWithGoogle() {
+  await requireGoogle();
+  const { error } = await sb().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: conf().redirectTo } });
   if (error) throw authError(error);
 }
 export async function sendPasswordReset(email: string) {

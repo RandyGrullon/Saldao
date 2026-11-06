@@ -1,5 +1,6 @@
 # En cada subida a main y en cada pull request: tipos, pruebas (reglas de dinero, migraciones en Postgres, tipos de la
-# base al día, núcleo sin navegador) y que la web compile. Vercel publica aparte; esto avisa si algo se rompió.
+# base al día, núcleo sin navegador, la cola sin conexión), que la web compile y que la app nativa arme su paquete de
+# Android con Metro. Vercel publica la web aparte; esto avisa si algo se rompió.
 name: Pruebas
 
 on:
@@ -29,3 +30,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx vite build
+      - run: npm run typecheck -w @saldao/mobile
+      - name: Paquete de Android (Metro)
+        working-directory: apps/mobile
+        run: npx expo export --platform android --output-dir ${{ runner.temp }}/saldao-android

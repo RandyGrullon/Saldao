@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "dev": "vite --host",
@@ -15,12 +16,15 @@
     "icons": "pwa-assets-generator",
     "db:push": "supabase db push",
     "typecheck": "tsc --noEmit",
-    "db:types": "vitest run supabase/tests/db-types.test.ts -u"
+    "db:types": "vitest run supabase/tests/db-types.test.ts -u",
+    "mobile": "npm start -w @saldao/mobile",
+    "mobile:demo": "npm run demo -w @saldao/mobile",
+    "typecheck:mobile": "npm run typecheck -w @saldao/mobile"
   },
   "dependencies": {
     "@saldao/core": "*",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.2.17",

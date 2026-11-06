@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Saldao",
+    "slug": "saldao",
+    "scheme": "saldao",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0e0f13",
+    "ios": {
+      "bundleIdentifier": "do.saldao.app",
+      "supportsTablet": false,
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "do.saldao.app",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#c8f169" },
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": { "output": "single", "favicon": "./assets/favicon.png", "bundler": "metro" },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      ["expo-splash-screen", { "image": "./assets/splash-icon.png", "imageWidth": 112, "backgroundColor": "#0e0f13" }],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
