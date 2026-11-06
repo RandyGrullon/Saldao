@@ -35,6 +35,14 @@ Está hecha solo para el teléfono: se instala, abre a pantalla completa y se co
 - Comentarios en cada gasto.
 - Tiempo real entre los miembros del grupo.
 
+**Sin conexión**
+- La app abre al instante con lo último que vio, también sin señal.
+- Gastos, pagos, borrados, confirmaciones y comentarios se anotan sin internet: se ven al momento con la marca
+  *sin enviar* y salen solos cuando vuelve la conexión.
+- Reenviar no duplica nada: cada cambio lleva su id y la base lo aplica una sola vez (`apply_op`).
+- Si la base rechaza algo enviado después (por ejemplo, ya no eres del grupo), la app lo avisa y se puede descartar.
+- Crear grupos, invitar y editar el perfil sí necesitan internet.
+
 ## Probar sin backend
 
 ```bash
@@ -103,7 +111,7 @@ Abre la URL que imprime Vite. El modo demo usa datos de ejemplo en memoria y no 
 npm test
 ```
 
-Corren en cada subida a GitHub (`.github/workflows/ci.yml`): tipos, pruebas y compilación. Hay cuatro suites:
+Corren en cada subida a GitHub (`.github/workflows/ci.yml`): tipos, pruebas y compilación. Hay cinco suites:
 - `packages/core/src/domain.test.ts` prueba las reglas de dinero: repartos con centavos justos, ítems con ITBIS y ley, multimoneda, saldos por pareja y estados del "por qué".
 - `supabase/tests/migration.test.ts` corre la migración real en Postgres (PGlite). Prueba:
   - RLS: nadie ve grupos ajenos y nadie escribe directo en las tablas;
@@ -114,7 +122,10 @@ Corren en cada subida a GitHub (`.github/workflows/ci.yml`): tipos, pruebas y co
   - comentarios;
   - grupos de a dos;
   - entrar con usuario y su bloqueo;
-  - seguridad: que toda tabla tenga RLS, que la lista de funciones y permisos abiertos sea exacta y que los límites frenen.
+  - seguridad: que toda tabla tenga RLS, que la lista de funciones y permisos abiertos sea exacta y que los límites frenen;
+  - cambios sin conexión: repetidos cuentan una vez, con el id que puso la app, y un cambio que falla se puede corregir.
+- `packages/core/src/store.test.ts` prueba la cola contra una base a la que se le corta la señal: se ve al instante,
+  sale sola al volver, no duplica, llega en orden, se guarda en el teléfono y cada cuenta tiene la suya.
 - `supabase/tests/db-types.test.ts` revisa que los tipos de la base estén al día con las migraciones (ver abajo).
 - `packages/core/src/core.test.ts` revisa que el núcleo no use nada del navegador, de Vite ni de React.
 
@@ -143,7 +154,8 @@ packages/core/       lo que comparten la web y la app nativa (sin navegador ni R
   src/domain.ts      reglas de dinero, sin dependencias
   src/derive.ts      saldos, deudas y textos que salen de los datos
   src/format.ts      RD$, fechas en español
-  src/store.ts       la foto de los datos y las acciones (cada app la conecta con sus hooks)
+  src/store.ts       la foto de los datos, la cola sin conexión y las acciones (cada app la conecta con sus hooks)
+  src/queue.ts       cómo se ve la cola encima de la foto
   src/supabase.ts    sesión, lectura y escritura en Supabase (configurable: la web y la nativa pasan lo suyo)
   src/demo.ts        datos de demostración en memoria
   src/database.types.ts  tipos de la base, generados desde las migraciones
@@ -166,7 +178,6 @@ supabase/
 - **Notificaciones push:** Web Push con claves VAPID.
 - **Recurrentes:** gastos que se repiten con `pg_cron`.
 - **Tasas de cambio:** automáticas y diarias.
-- **Offline:** cola de cambios sin conexión. Hoy la app abre offline, pero escribir necesita red.
 - **Simplificar deudas:** como plan de pagos opcional.
 - **Búsqueda, gráficos y exportar.**
 - **Grupos:** salir, archivar, cambiar roles y foto.

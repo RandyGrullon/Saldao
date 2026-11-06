@@ -147,6 +147,7 @@ export function ExpRow({ e, showGroup }: { e: Expense; showGroup?: boolean }) {
       <span className="main">
         <span className="t">{e.isPayment ? payText(s, e) : e.description}</span>
         <span className="s">
+          {e.pending && <Pill>sin enviar</Pill>}
           {e.isPayment ? <>{moneyT(e.amount, e.currency)} · {fdate(e.date)}{e.paymentStatus === 'pendiente' && <Pill tone="warn">por confirmar</Pill>}</>
             : <>{paidText(s, e)} · {fdate(e.date)}{showGroup && g && g.kind !== 'directo' ? ` · ${g.name}` : ''}
               {status && <Pill tone={status.done === status.total ? 'ok' : undefined}>{status.done === status.total ? 'saldado' : `${status.done} de ${status.total} saldados`}</Pill>}</>}

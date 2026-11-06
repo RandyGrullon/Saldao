@@ -446,6 +446,20 @@ a.row { color: inherit; text-decoration: none; }
 .toast:not(:has(button)) { padding-right: 18px; }
 
 /* ── movimiento: entradas suaves, esqueletos y la barra de carga ── */
+/* ── conexión: sin señal, por enviar o no guardado ── */
+.sync-wrap { position: absolute; z-index: 3; left: 0; right: 0; bottom: calc(var(--tabbar-h) + var(--sab) + 10px); display: flex; justify-content: center;
+  padding: 0 16px; pointer-events: none; }
+.sync-pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: 100%; padding: 0 14px; border-radius: 999px;
+  background: var(--surface-2); color: var(--fg-2); box-shadow: var(--shadow-float); font-size: 13px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; animation: fade-up 260ms var(--ease-out) backwards; }
+.sync-pill .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.sync-pill.busy .dot { background: var(--accent-ink); animation: fade-in 700ms ease-in-out infinite alternate; }
+.sync-pill.bad { background: var(--danger-soft); color: var(--danger); }
+.sync-pill.bad .dot { background: var(--danger); }
+.sync-pill b { font-weight: 750; margin-left: 2px; }
+.app:has(.sync-wrap) .toast-host { bottom: calc(var(--tabbar-h) + var(--sab) + 56px); }
+.app:has(.sync-wrap) .stage .pad { padding-bottom: calc(var(--tabbar-h) + var(--sab) + 80px); }
+
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }

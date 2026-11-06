@@ -298,6 +298,14 @@ export type Database = {
         }
         Returns: string
       }
+      apply_op: {
+        Args: {
+          p_args: Json
+          p_kind: string
+          p_op: string
+        }
+        Returns: Json
+      }
       can_edit: {
         Args: {
           p_expense: string

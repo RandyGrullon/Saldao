@@ -4,6 +4,7 @@ import { Icon, type IconName } from '../ui/icons';
 import { AnimMoney, Av, BalText, Empty, RowIc, Impact, Money, errMsg, payText, useAct, useS } from '../ui/kit';
 import { buzz, useNav } from '../ui/nav';
 import { MySettleSheet } from '../sheets/settle';
+import { useSync } from '../data/store';
 import { NewGroupSheet } from '../sheets/groups';
 import { AddExpenseSheet } from '../sheets/AddExpense';
 import { loadTheme, saveTheme, type ThemeMode } from '../lib/theme';
@@ -182,6 +183,8 @@ export function Account({ demo }: { demo: boolean }) {
   const [username, setUsername] = useState(me.username ?? '');
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(loadTheme);
+  const { pending } = useSync();
+  const [sure, setSure] = useState(false);
   const userOk = !username || USERNAME.test(username);
   const dirty = name.trim() !== me.name || payout.trim() !== (me.payout ?? '') || username !== (me.username ?? '');
   const save = async () => {
@@ -223,7 +226,11 @@ export function Account({ demo }: { demo: boolean }) {
         <li><a className="row tap" href={TERMS_URL} target="_blank" rel="noopener"><RowIc n="receipt" /><span className="main"><span className="t">Términos de uso</span></span><Icon n="chevR" className="faint" /></a></li>
         <li><a className="row tap" href={PRIVACY_URL} target="_blank" rel="noopener"><RowIc n="eye" /><span className="main"><span className="t">Política de privacidad</span></span><Icon n="chevR" className="faint" /></a></li>
       </ul>
-      <button className="btn danger block tap" onClick={() => run(b => b.signOut()).catch(() => location.reload())}><Icon n="out" sm />{demo ? 'Reiniciar demostración' : 'Cerrar sesión'}</button>
+      {sure && <p className="split-status bad">Tienes {plural(pending, 'cambio', 'cambios')} sin enviar. Si sales ahora, se pierden.</p>}
+      <button className="btn danger block tap" onClick={() => {
+        if (pending && !demo && !sure) { setSure(true); return; } // primero avisa: lo pendiente solo está en este teléfono
+        run(b => b.signOut()).catch(() => location.reload());
+      }}><Icon n="out" sm />{demo ? 'Reiniciar demostración' : sure ? 'Salir igual' : 'Cerrar sesión'}</button>
       <button className="link danger-link tap" onClick={() => nav.openSheet(<DeleteAccountSheet />, 'Borrar mi cuenta', true)}>Borrar mi cuenta</button>
       {demo && <p className="foot">Modo demostración: personas, montos y cuentas son de ejemplo y nada se guarda.</p>}
     </div>

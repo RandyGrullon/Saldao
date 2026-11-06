@@ -1,9 +1,10 @@
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js';
 import type { Database, Json, Tables } from './database.types';
 import type { Expense, Id, Item } from './domain';
+import { OFFLINE, RetryLater } from './errors';
 import { typedUser } from './format';
 import { LEGAL_VERSION } from './legal';
-import type { Activity, Backend, ExpenseInput, Group, InvitePreview, Snapshot } from './types';
+import type { Activity, ExpenseInput, Group, InvitePreview, Op, Server, Snapshot } from './types';
 
 // ── conexión ─────────────────────────────────────────────────
 // Cada app la configura al arrancar: la web con sus variables de Vite y el origen de la página; la nativa con las suyas,
@@ -26,11 +27,25 @@ let cfg: SupabaseConfig | null = null;
 let client: Client | null = null;
 export function initSupabase(c: SupabaseConfig) { cfg = c; client = null; }
 const conf = () => { if (!cfg) throw new Error('Falta configurar Supabase'); return cfg; };
+// Con señal débil una petición puede quedarse colgada: a los 20 s se corta y la cola la reintenta luego.
+const TIMEOUT = 20_000;
+const timedFetch: typeof fetch = (input, init) => {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), TIMEOUT);
+  init?.signal?.addEventListener('abort', () => ctl.abort());
+  return fetch(input, { ...init, signal: ctl.signal }).finally(() => clearTimeout(t));
+};
 export function sb(): Client {
   const c = conf();
   return (client ??= createClient<Database>(c.url, c.anonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: c.detectSessionInUrl ?? false, ...(c.storage ? { storage: c.storage } : {}) },
+    global: { fetch: timedFetch },
   }));
+}
+/** El usuario de la sesión guardada (sin ir a la red, salvo para renovarla). Sin señal para renovarla: reintentar. */
+async function sessionUser() {
+  const { data: { session }, error } = await sb().auth.getSession();
+  if (!session) throw error ? new RetryLater(OFFLINE) : new Error('Sesión vencida');
+  return session.user;
 }
 
 // ── sesión: correo y contraseña ──────────────────────────────
@@ -109,11 +124,18 @@ const DB_ES: Record<string, string> = {
   '22001': 'Un texto es demasiado largo.',
   'PGRST301': 'Tu sesión venció. Vuelve a entrar.',
 };
-type DbErr = { message?: string; code?: string };
+type DbErr = { message?: string; code?: string; hint?: string };
 const english = (m: string) => /permission denied|row-level security|violates|constraint|syntax|relation|column|function|JWT/i.test(m);
+// Lo que se arregla solo y vale la pena reintentar: sin respuesta (sin código), tiempo agotado, la base ocupada o
+// reiniciándose, la sesión vencida (se renueva sola).
+const TRANSIENT = new Set(['57014', '40001', '40P01', '53300', '53400', '57P01', '57P03', '08000', '08001', '08003', '08006',
+  'PGRST000', 'PGRST001', 'PGRST002', 'PGRST003', 'PGRST301']);
 export function dbError(e: DbErr): Error {
   const m = e.message ?? '';
-  if (m && !english(m) && ['P0001', '22023', '28000', '42501'].includes(e.code ?? '')) return new Error(m);
+  if (!e.code || /failed to fetch|network|load failed|abort/i.test(m)) return new RetryLater(OFFLINE);
+  if (e.hint === 'rate_limited') return new RetryLater(m); // el límite de intentos: el mensaje dice cuánto esperar
+  if (TRANSIENT.has(e.code)) return new RetryLater(DB_ES[e.code] ?? OFFLINE);
+  if (m && !english(m) && ['P0001', '22023', '28000', '42501'].includes(e.code)) return new Error(m);
   return new Error(DB_ES[e.code ?? ''] ?? 'No se pudo completar. Revisa tu conexión e intenta de nuevo.');
 }
 
@@ -148,16 +170,27 @@ const toGroup = (r: GroupRow): Group => ({
 
 let me: Id | null = null;
 const mine = () => { if (!me) throw new Error('Sesión vencida'); return me; };
-const toSnake = (e: ExpenseInput) => ({
-  id: e.id ?? null, group_id: e.groupId, description: e.description, category: e.category, date: e.date, currency: e.currency,
+const toSnake = (e: ExpenseInput & { id: Id }) => ({
+  id: e.id, group_id: e.groupId, description: e.description, category: e.category, date: e.date, currency: e.currency,
   amount: e.amount, fx_rate: e.fxRate, split_mode: e.splitMode, split_params: e.splitParams, items: e.items, tax: e.tax, tip: e.tip,
   note: e.note, repeat: e.repeat, payers: e.payers, shares: e.shares, is_payment: e.isPayment,
 });
 
-export const supabaseBackend: Backend = {
+// Cada cambio de la cola, como lo recibe apply_op. Un gasto nuevo lleva su id en new_id (con id, la base edita).
+function opArgs(op: Op): Json {
+  switch (op.kind) {
+    case 'save_expense': {
+      const p = toSnake(op.input);
+      return toJson({ p: op.create ? { ...p, id: null, new_id: p.id } : p });
+    }
+    case 'add_comment': return { id: op.commentId, expense_id: op.expenseId, body: op.body };
+    default: return { id: op.expenseId };
+  }
+}
+
+export const supabaseBackend: Server = {
   async load(): Promise<Snapshot> {
-    const { data: { user } } = await sb().auth.getUser();
-    if (!user) throw new Error('Sesión vencida');
+    const user = await sessionUser();
     const c = sb();
     const [profiles, groups, expenses, comments, activity, legal] = await Promise.all([
       // el correo no se pide (la base no lo deja leer): el tuyo viene de la sesión
@@ -189,11 +222,10 @@ export const supabaseBackend: Backend = {
     ch.subscribe();
     return () => { sb().removeChannel(ch); };
   },
-  saveExpense: e => ok(sb().rpc('save_expense', { p: toJson(toSnake(e)) })),
-  deleteExpense: async id => { await ok(sb().rpc('delete_expense', { p_id: id })); },
-  restoreExpense: async id => { await ok(sb().rpc('restore_expense', { p_id: id })); },
-  confirmPayment: async id => { await ok(sb().rpc('confirm_payment', { p_id: id })); },
-  async addComment(expenseId, body) { await ok(sb().from('comments').insert({ expense_id: expenseId, profile_id: mine(), body })); },
+  async applyOp(op) {
+    await sessionUser(); // sin sesión no se envía: la base lo rechazaría y el cambio se perdería
+    return ok(sb().rpc('apply_op', { p_op: op.id, p_kind: op.kind, p_args: opArgs(op) }));
+  },
   createGroup: (name, kind) => ok(sb().rpc('create_group', { p_name: name, p_kind: kind })),
   addPlaceholder: (groupId, name) => ok(sb().rpc('add_placeholder', { p_group: groupId, p_name: name })),
   addMember: async (groupId, profileId) => { await ok(sb().rpc('add_member', { p_group: groupId, p_profile: profileId })); },

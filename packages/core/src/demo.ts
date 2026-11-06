@@ -1,7 +1,7 @@
 // Backend de demostración: los datos del prototipo en memoria. `npm run dev:demo`.
 // Salir o borrar la cuenta llama a `onExit` (en la web, recargar la página: vuelve a empezar).
 import { apportion, itemSplit, split, type Cents, type Expense, type Id, type Item } from './domain';
-import type { Activity, Backend, Comment, Group, Profile, Snapshot, Verb } from './types';
+import type { Activity, Comment, ExpenseInput, Group, Profile, Server, Snapshot, Verb } from './types';
 
 const P = (id: Id, name: string, payout: string | null = null): Profile => ({ id, userId: id === 'me' ? 'u-me' : `u-${id}`, name, email: null, payout, username: null, deletedAt: null });
 let profiles: Record<Id, Profile> = {
@@ -80,14 +80,10 @@ const log = (groupId: Id, verb: Verb, expenseId: Id | null = null, payload: Reco
   activity.push(A(groupId, 'me', verb, expenseId, now(), payload));
 const uid = (p: string) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export const createDemoBackend = (onExit: () => void): Backend => ({
-  async load(): Promise<Snapshot> {
-    return { me: 'me', profiles: { ...profiles }, groups: groups.map(g => ({ ...g })), expenses: [...expenses], comments: [...comments],
-      activity: [...activity].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), legalOk: true };
-  },
-  subscribe: () => () => {},
-  async saveExpense(i) {
-    const id = i.id ?? uid('x');
+// Los cambios de la cola, como los aplicaría la base (en la demostración nunca falta la conexión).
+const writes = {
+  async saveExpense(i: ExpenseInput & { id: Id }) {
+    const id = i.id;
     const prev = expenses.find(e => e.id === id);
     const e: Expense = { ...i, id, items: i.items, deletedAt: null, createdBy: prev?.createdBy ?? 'me', createdAt: prev?.createdAt ?? now(),
       paymentStatus: i.isPayment ? (i.shares.me ? 'confirmado' : 'pendiente') : null };
@@ -95,21 +91,39 @@ export const createDemoBackend = (onExit: () => void): Backend => ({
     log(i.groupId, prev ? 'gasto_editado' : i.isPayment ? 'pago_registrado' : 'gasto_creado', id, { descripcion: i.description, monto: i.amount, moneda: i.currency });
     return id;
   },
-  async deleteExpense(id) {
+  async deleteExpense(id: Id) {
     expenses = expenses.map(e => e.id === id ? { ...e, deletedAt: now() } : e);
     log(expenses.find(e => e.id === id)!.groupId, 'gasto_borrado', id);
   },
-  async restoreExpense(id) {
+  async restoreExpense(id: Id) {
     expenses = expenses.map(e => e.id === id ? { ...e, deletedAt: null } : e);
     log(expenses.find(e => e.id === id)!.groupId, 'gasto_restaurado', id);
   },
-  async confirmPayment(id) {
+  async confirmPayment(id: Id) {
     expenses = expenses.map(e => e.id === id ? { ...e, paymentStatus: 'confirmado' } : e);
     log(expenses.find(e => e.id === id)!.groupId, 'pago_confirmado', id);
   },
-  async addComment(expenseId, body) {
-    comments = [...comments, { id: uid('c'), expenseId, profileId: 'me', body, createdAt: now() }];
+  async addComment(id: Id, expenseId: Id, body: string) {
+    if (comments.some(c => c.id === id)) return;
+    comments = [...comments, { id, expenseId, profileId: 'me', body, createdAt: now() }];
     log(expenses.find(e => e.id === expenseId)!.groupId, 'comentario', expenseId, { texto: body });
+  },
+};
+
+export const createDemoBackend = (onExit: () => void): Server => ({
+  async load(): Promise<Snapshot> {
+    return { me: 'me', profiles: { ...profiles }, groups: groups.map(g => ({ ...g })), expenses: [...expenses], comments: [...comments],
+      activity: [...activity].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), legalOk: true };
+  },
+  subscribe: () => () => {},
+  async applyOp(op) {
+    switch (op.kind) {
+      case 'save_expense': return writes.saveExpense(op.input);
+      case 'delete_expense': return writes.deleteExpense(op.expenseId);
+      case 'restore_expense': return writes.restoreExpense(op.expenseId);
+      case 'confirm_payment': return writes.confirmPayment(op.expenseId);
+      case 'add_comment': return writes.addComment(op.commentId, op.expenseId, op.body);
+    }
   },
   async createGroup(name, kind) {
     const g = G(uid('g'), name, kind, ['me'], now());

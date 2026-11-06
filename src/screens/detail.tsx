@@ -122,6 +122,7 @@ export function ExpenseScreen({ id }: { id: Id }) {
           <h1>{e.isPayment ? payText(s, e) : e.description}</h1>
           <p className="big"><Money c={e.amount} cur={e.currency} /></p>
           {e.currency !== 'DOP' && <p className="note">Equivale a {moneyT(toBase(e).total)} · US$ 1 = RD$ {e.fxRate.toFixed(2)} ese día</p>}
+          {e.pending && <p className="note"><Pill>sin enviar</Pill> Guardado en este teléfono: se envía solo cuando haya conexión.</p>}
           {e.deletedAt && <p className="note"><Pill tone="warn">borrado</Pill> No cuenta en los saldos.</p>}
           {e.isPayment && e.paymentStatus === 'pendiente' && !e.deletedAt && <p className="note"><Pill tone="warn">por confirmar</Pill> {recipient === s.me ? 'Confirma si te llegó.' : `${short(s, recipient!)} todavía no confirma que le llegó.`}</p>}
           {e.isPayment && e.paymentStatus === 'confirmado' && <p className="note"><Pill tone="ok">confirmado</Pill> {e.splitParams.method === 'efectivo' ? 'En efectivo.' : 'Por transferencia.'}</p>}
@@ -157,7 +158,7 @@ export function ExpenseScreen({ id }: { id: Id }) {
         <section className="card">
           <h2>Comentarios</h2>
           {comments.length ? <ul className="comments">{comments.map(x => (
-            <li key={x.id}><Av id={x.profileId} size="sm" /><div><p className="s">{short(s, x.profileId)} · {ago(x.createdAt)}</p><p style={{ userSelect: 'text' }}>{x.body}</p></div></li>))}</ul>
+            <li key={x.id}><Av id={x.profileId} size="sm" /><div><p className="s">{short(s, x.profileId)} · {x.pending ? 'sin enviar' : ago(x.createdAt)}</p><p style={{ userSelect: 'text' }}>{x.body}</p></div></li>))}</ul>
             : <p className="note">Todavía nadie comenta.</p>}
           <form className="composer" onSubmit={ev => { ev.preventDefault(); send(); }}>
             <input value={text} onChange={ev => setText(ev.target.value)} placeholder="Escribe un comentario" enterKeyHint="send" autoComplete="off" aria-label="Comentario" maxLength={1000} />

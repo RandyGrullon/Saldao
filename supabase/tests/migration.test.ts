@@ -1,6 +1,7 @@
 // Corre la migración real en PGlite (Postgres en WASM) con un "auth" mínimo de imitación,
 // y prueba las reglas que importan: RLS, que los gastos cuadren, permisos y reclamar un marcador.
 import type { PGlite } from '@electric-sql/pglite';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { LEGAL_VERSION } from '../../packages/core/src/legal';
@@ -208,7 +209,7 @@ describe('seguridad', () => {
 
   it('con sesión, solo las funciones de la app y las que usan las reglas', async () => {
     expect(await runnable('authenticated')).toEqual([
-      'accept_legal', 'add_member', 'add_placeholder', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_account',
+      'accept_legal', 'add_member', 'add_placeholder', 'apply_op', 'can_edit', 'confirm_payment', 'create_group', 'current_profile_id', 'delete_account',
       'delete_expense', 'direct_group', 'invite_preview', 'is_admin', 'is_member', 'join_group', 'login_email', 'regenerate_invite',
       'restore_expense', 'save_expense', 'shares_group', 'username_available'].sort());
   });
@@ -326,5 +327,68 @@ describe('términos, privacidad y borrar la cuenta', () => {
     await expect(as(U.beto, () => one('select join_group($1, $2)', [token, eva]))).rejects.toThrow(/ya lo reclamó/);
     // sin cuenta, ya no puede hacer nada
     await expect(as(U2.eva, () => one(`select create_group('Otra', 'otro')`))).rejects.toThrow(/iniciar sesión/);
+  });
+});
+
+describe('cambios sin conexión: cada uno se aplica una sola vez', () => {
+  const U3 = { gia: '00000000-0000-0000-0000-0000000000a1', hugo: '00000000-0000-0000-0000-0000000000b1' };
+  let g: string, gia: string, mk: string;
+  const apply = (u: string, op: string, kind: string, args: object) => as(u, () => one('select apply_op($1, $2, $3) as r', [op, kind, JSON.stringify(args)]));
+  const count = async (q: string, p: unknown[]) => (await one<{ n: number }>(`select count(*)::int as n from ${q}`, p)).n;
+  const gasto = (o: object) => ({ group_id: g, description: 'Hielo', amount: 1000, split_mode: 'equal', payers: { [gia]: 1000 }, shares: { [gia]: 500, [mk]: 500 }, ...o });
+
+  beforeAll(async () => {
+    await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'gia@ejemplo.do', '{"full_name":"Gia"}'), ($2, 'hugo@ejemplo.do', '{}')`, [U3.gia, U3.hugo]);
+    gia = await pid(U3.gia);
+    g = await as(U3.gia, async () => (await one<{ g: string }>(`select create_group('Playa', 'viaje') as g`)).g);
+    mk = await as(U3.gia, async () => (await one<{ p: string }>(`select add_placeholder($1, 'Mar') as p`, [g])).p);
+  });
+
+  it('un gasto nuevo guarda el id que puso la app y, si llega dos veces, queda una sola vez', async () => {
+    const op = randomUUID(), id = randomUUID();
+    expect((await apply(U3.gia, op, 'save_expense', { p: gasto({ new_id: id }) })).r).toBe(id);
+    expect((await apply(U3.gia, op, 'save_expense', { p: gasto({ new_id: id }) })).r).toBe(id);
+    expect(await count('expenses where id = $1', [id])).toBe(1);
+    expect(await count(`activity where expense_id = $1 and verb = 'gasto_creado'`, [id])).toBe(1);
+  });
+
+  it('una edición repetida cuenta una vez; un borrado y su deshacer, en orden', async () => {
+    const id = randomUUID();
+    await apply(U3.gia, randomUUID(), 'save_expense', { p: gasto({ new_id: id }) });
+    const edit = randomUUID();
+    await apply(U3.gia, edit, 'save_expense', { p: gasto({ id, description: 'Hielo y carbón', amount: 1200, payers: { [gia]: 1200 }, shares: { [gia]: 600, [mk]: 600 } }) });
+    await apply(U3.gia, edit, 'save_expense', { p: gasto({ id, description: 'Hielo y carbón', amount: 1200, payers: { [gia]: 1200 }, shares: { [gia]: 600, [mk]: 600 } }) });
+    expect(await count(`activity where expense_id = $1 and verb = 'gasto_editado'`, [id])).toBe(1);
+    await apply(U3.gia, randomUUID(), 'delete_expense', { id });
+    await apply(U3.gia, randomUUID(), 'restore_expense', { id });
+    expect(await one('select description, amount::int, deleted_at from expenses where id = $1', [id])).toEqual({ description: 'Hielo y carbón', amount: 1200, deleted_at: null });
+  });
+
+  it('un comentario con su id, dos veces, queda uno', async () => {
+    const e = randomUUID(), op = randomUUID(), c = randomUUID();
+    await apply(U3.gia, randomUUID(), 'save_expense', { p: gasto({ new_id: e }) });
+    expect((await apply(U3.gia, op, 'add_comment', { id: c, expense_id: e, body: 'Lo compré en el colmado' })).r).toBe(c);
+    await apply(U3.gia, op, 'add_comment', { id: c, expense_id: e, body: 'Lo compré en el colmado' });
+    expect(await count('comments where id = $1', [c])).toBe(1);
+    expect(await count(`activity where expense_id = $1 and verb = 'comentario'`, [e])).toBe(1);
+  });
+
+  it('si el cambio falla no queda apartado: corregido, el mismo id entra', async () => {
+    const op = randomUUID(), id = randomUUID();
+    await expect(apply(U3.gia, op, 'save_expense', { p: gasto({ new_id: id, amount: 999 }) })).rejects.toThrow(/No cuadra/);
+    expect((await apply(U3.gia, op, 'save_expense', { p: gasto({ new_id: id }) })).r).toBe(id);
+  });
+
+  it('el id de un cambio es de cada quien y nadie comenta fuera de sus grupos', async () => {
+    const e = randomUUID(), op = randomUUID();
+    await apply(U3.gia, randomUUID(), 'save_expense', { p: gasto({ new_id: e }) });
+    await apply(U3.gia, op, 'add_comment', { id: randomUUID(), expense_id: e, body: 'Mío' });
+    await expect(apply(U3.hugo, op, 'add_comment', { id: randomUUID(), expense_id: e, body: 'Me cuelo' })).rejects.toThrow(/No puedes comentar/);
+    await expect(apply(U3.hugo, randomUUID(), 'save_expense', { p: gasto({ new_id: randomUUID() }) })).rejects.toThrow(/No perteneces/);
+  });
+
+  it('un cambio desconocido o incompleto se rechaza', async () => {
+    await expect(apply(U3.gia, randomUUID(), 'borrar_todo', {})).rejects.toThrow(/no existe/);
+    await expect(as(U3.gia, () => one(`select apply_op(null, 'delete_expense', '{}')`))).rejects.toThrow(/incompleto/);
   });
 });

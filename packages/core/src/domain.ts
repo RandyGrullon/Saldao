@@ -28,6 +28,7 @@ export interface Expense {
   createdBy: Id;
   createdAt: string;       // ISO
   deletedAt: string | null;
+  pending?: boolean;       // anotado en el teléfono, todavía sin enviar a la base
 }
 
 export const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { APP, start, stop } from '@saldao/core';
 import { sb, supabaseBackend } from '@saldao/core/supabase';
-import { isConfigured } from './data/connect';
+import { isConfigured, storage } from './data/connect';
 import { useBusy, useSnap } from './data/store';
 import { pendingInvite } from './lib/invite';
 import { AuthScreen, NewPasswordScreen } from './screens/auth';
@@ -12,6 +12,7 @@ import { JoinSheet } from './sheets/groups';
 import { Icon, type IconName } from './ui/icons';
 import { HomeSkeleton, errMsg } from './ui/kit';
 import { NavShell, useNav, type Nav, type Tab } from './ui/nav';
+import { SyncPill } from './ui/sync';
 
 /** La bienvenida de index.html se va cuando hay algo que mostrar (y a más tardar a los 4 s). */
 function hideSplash() {
@@ -39,7 +40,7 @@ export function App() {
       user.current = uid;
       if (!uid) { stop(); setPhase('login'); return; }
       setPhase('loading');
-      try { await start(supabaseBackend); setPhase('ready'); } catch (e) { setErr(errMsg(e)); setPhase('error'); }
+      try { await start(supabaseBackend, { storage, key: uid }); setPhase('ready'); } catch (e) { setErr(errMsg(e)); setPhase('error'); }
     };
     // supabase-js recomienda no llamar a Supabase dentro del callback: se difiere un tick.
     const { data } = sb().auth.onAuthStateChange((ev, session) => {
@@ -77,7 +78,7 @@ function Ready() {
     <NavShell
       renderTab={t => t === 'home' ? <Home /> : t === 'groups' ? <Groups /> : t === 'activity' ? <ActivityTab unread={unread} /> : <Account demo={DEMO} />}
       renderRoute={r => r.kind === 'group' ? <GroupScreen id={r.id} /> : r.kind === 'person' ? <PersonScreen id={r.id} /> : <ExpenseScreen id={r.id} />}
-      tabbar={nav => <Tabbar nav={nav} unread={unread.n} />}>
+      tabbar={nav => <><SyncPill /><Tabbar nav={nav} unread={unread.n} /></>}>
       {token && <OpenOnce node={<JoinSheet token={token} />} label="Invitación" />}
       {busy && <div className="top-loader" role="progressbar" aria-label="Guardando" />}
     </NavShell>
