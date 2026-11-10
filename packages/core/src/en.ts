@@ -448,6 +448,7 @@ export const EN: Record<string, string> = {
   "Lo que pagó {0}": "What {0} paid",
   "Lo que se aportó menos lo que pagó el fondo.": "What was contributed minus what the fund paid.",
   "Lo ve la gente de tus grupos cuando te va a pagar, con un botón para copiarlo.": "People in your groups see it when they pay you, with a button to copy it.",
+  "Los ítems o las partes no son válidos": "The items or the shares aren't valid",
   "Los avisos llegan con la app instalada (falta conectarla a su proyecto de Expo).": "Notifications arrive with the installed app (it still needs its Expo project).",
   "Los avisos solo llegan a un teléfono de verdad.": "Notifications only arrive on a real phone.",
   "Los gastos, pagos y comentarios que compartiste, con tu nombre: también son las cuentas de las otras personas.": "The expenses, payments and comments you shared, with your name: they're the other people's accounts too.",

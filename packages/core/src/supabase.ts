@@ -178,14 +178,16 @@ const toGroup = (r: GroupRow): Group => ({
 
 let me: Id | null = null;
 const mine = () => { if (!me) throw new Error(tr("Sesión vencida")); return me; };
-const toSnake = (e: ExpenseInput & { id: Id }) => ({
+// Sin ítems, el campo no va: un `null` de JSON en una columna jsonb queda guardado como el valor «null» (no como vacío)
+// y la regla expenses_items_tope lo rechaza («Algún dato no es válido»). Lo mismo con las partes: siempre un objeto.
+export const toSnake = (e: ExpenseInput & { id: Id }) => ({
   id: e.id, group_id: e.groupId, description: e.description, category: e.category, date: e.date, currency: e.currency,
-  amount: e.amount, fx_rate: e.fxRate, split_mode: e.splitMode, split_params: e.splitParams, items: e.items, tax: e.tax, tip: e.tip,
-  note: e.note, repeat: e.repeat, payers: e.payers, shares: e.shares, is_payment: e.isPayment,
+  amount: e.amount, fx_rate: e.fxRate, split_mode: e.splitMode, split_params: e.splitParams ?? {}, items: e.items ?? undefined,
+  tax: e.tax, tip: e.tip, note: e.note, repeat: e.repeat, payers: e.payers, shares: e.shares, is_payment: e.isPayment,
 });
 
 // Cada cambio de la cola, como lo recibe apply_op. Un gasto nuevo lleva su id en new_id (con id, la base edita).
-function opArgs(op: Op): Json {
+export function opArgs(op: Op): Json {
   switch (op.kind) {
     case 'save_expense': {
       const p = toSnake(op.input);
