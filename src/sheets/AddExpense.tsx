@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  apportion, cat, CATS, curSym, expensePhotoPath, fetchUsdRate, frequentExpenses, friends, fundOf, groupOf, guessCat, itemSplit, moneyT, parseMoney, plural, REPEATS,
+  apportion, apportionStep, cat, CATS, centsText, curDecimals, curName, CURRENCIES, curStep, curSym, expensePhotoPath, fetchRate, frequentExpenses, friends, fundOf, groupOf, guessCat,
+  itemSplit, moneyT, parseMoney, parseNum, plural, REPEATS,
   run, short, split, sum, today, typed, visibleGroups, getBackend, type Expense, type Id, type Snapshot, type SplitMode,
 } from '@saldao/core';
 import { pickPhoto, readPhoto, type Photo } from '../lib/photo';
@@ -13,12 +14,13 @@ import { tr } from '@saldao/core';
 type Mode = SplitMode | 'nights';
 const MODES: [Mode, string][] = [['equal', 'Iguales'], ['exact', 'Montos'], ['percent', '%'], ['shares', 'Partes'], ['nights', 'Noches'], ['adjust', 'Extra'], ['items', 'Ítems']];
 type ItemDraft = { name: string; price: string; to: Id[] };
-const RATE_KEY = 'saldao:tasa-usd';
 const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
 const ones = (ms: Id[]) => Object.fromEntries(ms.map(k => [k, 1]));
 const clean = (o: Record<Id, number>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v > 0));
-const cents2 = (c: number) => (c / 100).toFixed(2);
+const cents2 = (c: number, cur = 'DOP') => centsText(c, cur);
+/** La tasa que se usó la última vez en cada moneda (la del dólar se llama como antes). */
+const rateKey = (c: string) => (c === 'USD' ? 'saldao:tasa-usd' : `saldao:tasa-${c.toLowerCase()}`);
 const modeOf = (e: Expense): Mode => (e.splitMode === 'shares' && e.splitParams.unit === 'noches' ? 'nights' : e.splitMode);
 
 /** "g:<grupo>" o "p:<persona>" (gasto de a dos, sin grupo). */
@@ -37,7 +39,7 @@ function payersOf(s: Snapshot, target: string): Id[] {
   return f ? [...membersOf(s, target), f] : membersOf(s, target);
 }
 function initVals(e: Expense): Record<Id, string> {
-  if (e.splitMode === 'exact') return Object.fromEntries(Object.entries(e.shares).map(([k, v]) => [k, cents2(v)]));
+  if (e.splitMode === 'exact') return Object.fromEntries(Object.entries(e.shares).map(([k, v]) => [k, cents2(v, e.currency)]));
   return Object.fromEntries(Object.entries(e.splitParams.vals ?? {}).map(([k, v]) => [k, String(v)]));
 }
 
@@ -51,7 +53,7 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
   const [step, setStep] = useState<1 | 2>(edit ? 2 : 1);
   const [amt, setAmt] = useState(edit && edit.splitMode !== 'items' ? String(edit.amount / 100) : '');
   const [cur, setCur] = useState(edit?.currency ?? 'DOP');
-  const [rate, setRate] = useState(edit && edit.currency !== 'DOP' ? String(edit.fxRate) : lsGet(RATE_KEY) ?? '');
+  const [rate, setRate] = useState(edit && edit.currency !== 'DOP' ? String(edit.fxRate) : '');
   const [rateNote, setRateNote] = useState('');
   const [desc, setDesc] = useState(edit?.description ?? preset?.description ?? '');
   const [catKey, setCatKey] = useState<string | null>(edit?.category ?? preset?.category ?? null);
@@ -60,22 +62,29 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
   const [repeat, setRepeat] = useState(edit?.repeat ?? '');
   const [multi, setMulti] = useState(edit ? Object.keys(edit.payers).length > 1 : false);
   const [payer, setPayer] = useState<Id>(edit ? Object.keys(edit.payers)[0] : preset?.payer ?? s.me);
-  const [payVals, setPayVals] = useState<Record<Id, string>>(edit ? Object.fromEntries(Object.entries(edit.payers).map(([k, v]) => [k, cents2(v)])) : {});
+  const [payVals, setPayVals] = useState<Record<Id, string>>(edit ? Object.fromEntries(Object.entries(edit.payers).map(([k, v]) => [k, cents2(v, edit.currency)])) : {});
   const [mode, setMode] = useState<Mode>(edit ? modeOf(edit) : 'equal');
   const [on, setOn] = useState<Record<Id, boolean>>(edit ? Object.fromEntries(Object.keys(edit.shares).map(k => [k, true])) : Object.fromEntries(members.map(k => [k, true])));
   const [vals, setVals] = useState<Record<Id, string>>(edit ? initVals(edit) : {});
-  const [items, setItems] = useState<ItemDraft[]>(edit?.items ? edit.items.map(i => ({ name: i.name, price: cents2(i.price), to: i.to })) : []);
+  const [items, setItems] = useState<ItemDraft[]>(edit?.items ? edit.items.map(i => ({ name: i.name, price: cents2(i.price, edit.currency), to: i.to })) : []);
   const [tax, setTax] = useState(edit ? edit.tax > 0 : true);
   const [tip, setTip] = useState(edit ? edit.tip > 0 : true);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // en dólares: la tasa de hoy si no hay una escrita
+  /** Otra moneda: la tasa que se usó la última vez en ella (o la de hoy) y, en yenes, sin centavos. */
+  const changeCur = (c: string) => {
+    if (c === cur) return;
+    buzz(); setCur(c); setRateNote('');
+    setRate(c === 'DOP' ? '' : lsGet(rateKey(c)) ?? '');
+    if (!curDecimals(c)) setAmt(a => a.split('.')[0]);
+  };
+  // en otra moneda: la tasa de hoy si no hay una escrita
   useEffect(() => {
     if (cur === 'DOP' || edit) return;
     let live = true;
-    fetchUsdRate().then(r => { if (live && r) { setRate(x => x || String(r)); setRateNote(tr("Tasa de hoy: RD$ {0} (ExchangeRate-API)", r.toFixed(2))); } });
+    fetchRate(cur).then(r => { if (live && r) { setRate(x => x || String(r)); setRateNote(tr("Tasa de hoy: RD$ {0} (ExchangeRate-API)", r < 10 ? String(r) : r.toFixed(2))); } });
     return () => { live = false; };
   }, [cur, edit]);
 
@@ -88,35 +97,36 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
 
   const catK = catKey ?? guessCat(desc);
   const fmt = (c: number) => moneyT(c, cur);
-  const parsedItems = items.map(i => ({ name: i.name.trim() || tr("Ítem"), price: parseMoney(i.price), to: i.to }));
-  const ix = itemSplit(parsedItems, tax ? 18 : 0, tip ? 10 : 0);
-  const total = mode === 'items' ? ix.total : parseMoney(amt || '0');
+  const minStep = curStep(cur);
+  const parsedItems = items.map(i => ({ name: i.name.trim() || tr("Ítem"), price: parseMoney(i.price, cur), to: i.to }));
+  const ix = itemSplit(parsedItems, tax ? 18 : 0, tip ? 10 : 0, minStep);
+  const total = mode === 'items' ? ix.total : parseMoney(amt || '0', cur);
   const splitMode: SplitMode = mode === 'nights' ? 'shares' : mode;
   const r = mode === 'items'
     ? { shares: ix.shares, ok: parsedItems.length > 0 && !ix.unassigned && parsedItems.every(i => i.price > 0),
-        status: !parsedItems.length ? 'Agrega los ítems del recibo' : parsedItems.some(i => i.price <= 0) ? 'A un ítem le falta el precio'
-          : ix.unassigned ? `${plural(ix.unassigned, tr("ítem"), tr("ítems"))} sin nadie asignado` : 'Cuadra con el recibo' }
-    : (() => { const x = split(splitMode, total, members, { on, vals }, fmt); return mode === 'nights' ? { ...x, status: x.ok ? x.status.replace('partes', 'noches') : 'Pon cuántas noches estuvo cada quien' } : x; })();
-  const payers: Record<Id, number> = multi ? clean(Object.fromEntries(payerIds.map(k => [k, parseMoney(payVals[k] ?? '')]))) : { [payer]: total };
+        status: !parsedItems.length ? tr('Agrega los ítems del recibo') : parsedItems.some(i => i.price <= 0) ? tr('A un ítem le falta el precio')
+          : ix.unassigned ? tr('{0} sin nadie asignado', plural(ix.unassigned, tr("ítem"), tr("ítems"))) : tr('Cuadra con el recibo') }
+    : split(splitMode, total, members, { on, vals, nights: mode === 'nights' }, fmt, minStep);
+  const payers: Record<Id, number> = multi ? clean(Object.fromEntries(payerIds.map(k => [k, parseMoney(payVals[k] ?? '', cur)]))) : { [payer]: total };
   const paidDiff = total - sum(payers);
-  const rateN = cur === 'DOP' ? 1 : Number(rate.replace(',', '.'));
+  const rateN = cur === 'DOP' ? 1 : parseNum(rate);
   const okRate = cur === 'DOP' || rateN > 0;
   const ok = r.ok && paidDiff === 0 && okRate && total > 0;
-  const status = !r.ok ? r.status : paidDiff ? tr("Lo pagado no cuadra: {0} {1}", paidDiff > 0 ? tr("faltan") : tr("sobran"), fmt(Math.abs(paidDiff))) : !okRate ? tr("Falta la tasa del dólar") : r.status;
+  const status = !r.ok ? r.status : paidDiff ? tr("Lo pagado no cuadra: {0} {1}", paidDiff > 0 ? tr("faltan") : tr("sobran"), fmt(Math.abs(paidDiff))) : !okRate ? tr("Falta la tasa de cambio") : r.status;
 
   const key = (k: string) => {
     buzz();
     setAmt(a => {
       if (k === 'del') return a.slice(0, -1);
-      if (k === '.') return a.includes('.') ? a : (a || '0') + '.';
-      if ((a.split('.')[1] ?? '').length >= 2 || a.replace('.', '').length >= 9) return a;
+      if (k === '.') return a.includes('.') || !curDecimals(cur) ? a : (a || '0') + '.'; // el yen no tiene centavos
+      if ((a.split('.')[1] ?? '').length >= curDecimals(cur) && a.includes('.') || a.replace('.', '').length >= 9) return a;
       return a === '0' ? k : a + k;
     });
   };
-  const pickMode = (m: Mode, ms = members, t = parseMoney(amt || '0')) => {
+  const pickMode = (m: Mode, ms = members, t = parseMoney(amt || '0', cur)) => {
     setMode(m);
     if (m === 'equal') setOn(Object.fromEntries(ms.map(k => [k, true])));
-    if (m === 'exact') { const a = apportion(t, ones(ms)); setVals(Object.fromEntries(ms.map(k => [k, cents2(a[k])]))); }
+    if (m === 'exact') { const a = apportionStep(t, ones(ms), curStep(cur)); setVals(Object.fromEntries(ms.map(k => [k, cents2(a[k], cur)]))); }
     if (m === 'percent') { const a = apportion(10000, ones(ms)); setVals(Object.fromEntries(ms.map(k => [k, String(a[k] / 100)]))); }
     if (m === 'shares' || m === 'nights') setVals(Object.fromEntries(ms.map(k => [k, '1'])));
     if (m === 'adjust') setVals({});
@@ -137,8 +147,8 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
     setAmt(e.splitMode === 'items' ? '' : String(e.amount / 100)); setMode(modeOf(e)); setVals(initVals(e));
     setOn(Object.fromEntries(Object.keys(e.shares).map(k => [k, true])));
     setMulti(Object.keys(e.payers).length > 1); setPayer(Object.keys(e.payers)[0]);
-    setPayVals(Object.fromEntries(Object.entries(e.payers).map(([k, v]) => [k, cents2(v)])));
-    if (e.items) setItems(e.items.map(i => ({ name: i.name, price: cents2(i.price), to: i.to })));
+    setPayVals(Object.fromEntries(Object.entries(e.payers).map(([k, v]) => [k, cents2(v, e.currency)])));
+    if (e.items) setItems(e.items.map(i => ({ name: i.name, price: cents2(i.price, e.currency), to: i.to })));
   };
   const scan = async () => {
     const f = await pickPhoto(); if (!f) return;
@@ -148,7 +158,7 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
       const res = await getBackend()!.scanReceipt(p.base64, 'image/jpeg');
       if (!res.items.length) throw new Error(tr("No encontramos ítems en esa foto. Prueba con más luz o anótalos a mano."));
       setPhoto(p);
-      setItems(res.items.map(i => ({ name: i.name, price: cents2(i.price), to: [...members] })));
+      setItems(res.items.map(i => ({ name: i.name, price: cents2(i.price, cur), to: [...members] })));
       setTax(res.tax > 0); setTip(res.tip > 0);
       if (!desc.trim() && res.merchant) setDesc(res.merchant);
       if (res.date && res.date <= today()) setDate(res.date);
@@ -168,13 +178,13 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
         id = await b.saveExpense({
           id: edit?.id, groupId: gid, description: desc.trim() || cat(catK).name, category: catK, date, currency: cur, amount: total, fxRate: rateN,
           splitMode, splitParams: mode === 'equal' ? { on: members.filter(k => on[k]) } : mode === 'items' ? {}
-            : { vals: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, Number(v.replace(',', '.')) || 0])), ...(mode === 'nights' && { unit: 'noches' as const }) },
+            : { vals: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, parseNum(v)])), ...(mode === 'nights' && { unit: 'noches' as const }) },
           items: mode === 'items' ? parsedItems : null, tax: mode === 'items' && tax ? 18 : 0, tip: mode === 'items' && tip ? 10 : 0,
           note: note.trim() || null, repeat: repeat || null, payers, shares: clean(r.shares), isPayment: false,
         });
         for (const it of clearItems ?? []) await b.deleteItem(it).catch(() => {});
       });
-      if (cur !== 'DOP') lsSet(RATE_KEY, rate);
+      if (cur !== 'DOP') lsSet(rateKey(cur), rate);
       buzz(); nav.closeSheet();
       nav.toast(edit ? tr("Cambios guardados") : tr("Gasto guardado"), edit ? undefined : () => { run(b => b.deleteExpense(id)).catch(e => nav.toast(errMsg(e))); });
       if (photo) {
@@ -191,17 +201,20 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
   if (step === 1) return (
     <>
       <SheetHead title={edit ? tr("Editar gasto") : tr("Nuevo gasto")}
-        right={<button className="link strong tap" disabled={!(parseMoney(amt || '0') > 0 && okRate)} onClick={() => { if (mode === 'exact') pickMode('exact'); setStep(2); }}>{tr("Siguiente")}</button>} />
+        right={<button className="link strong tap" disabled={!(parseMoney(amt || '0', cur) > 0 && okRate)} onClick={() => { if (mode === 'exact') pickMode('exact'); setStep(2); }}>{tr("Siguiente")}</button>} />
       <div className="scroll sheet-scroll pad">
         <div className="amount">
-          <button className="cur tap" onClick={() => setCur(c => (c === 'DOP' ? 'USD' : 'DOP'))} aria-label={tr("Moneda: {0}. Cambiar", curSym(cur))}>{curSym(cur)}</button>
-          <output className={`amount-v${amt ? '' : ' empty'}`} aria-live="polite">{amt ? typed(amt) : '0.00'}</output>
+          <label className="cur tap"><span aria-hidden="true">{curSym(cur)}</span>
+            <select value={cur} onChange={e => changeCur(e.target.value)} aria-label={tr("Moneda: {0}. Cambiar", curName(cur))}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{curSym(c)} · {curName(c)}</option>)}
+            </select></label>
+          <output className={`amount-v${amt ? '' : ' empty'}`} aria-live="polite">{amt ? typed(amt) : curDecimals(cur) ? '0.00' : '0'}</output>
         </div>
         {cur !== 'DOP' && <>
-          <label className="num-in wide"><span>{tr("RD$ por US$ 1:")}</span>
-            <input inputMode="decimal" value={rate} placeholder={tr("Tasa de hoy")} onChange={e => { setRate(e.target.value); setRateNote(''); }} aria-label={tr("Tasa del dólar")} /></label>
+          <label className="num-in wide"><span>{tr("RD$ por {0} 1:", curSym(cur))}</span>
+            <input inputMode="decimal" value={rate} placeholder={tr("Tasa de hoy")} onChange={e => { setRate(e.target.value); setRateNote(''); }} aria-label={tr("Tasa de cambio")} /></label>
           {rateNote && <p className="note center">{rateNote}</p>}
-          {rateN > 0 && parseMoney(amt || '0') > 0 && <p className="note center">{tr("Equivale a {0}", moneyT(Math.round(parseMoney(amt) * rateN)))}</p>}
+          {rateN > 0 && parseMoney(amt || '0', cur) > 0 && <p className="note center">{tr("Equivale a {0}", moneyT(Math.round(parseMoney(amt, cur) * rateN)))}</p>}
         </>}
         {usual.length > 0 && <>
           <h3>{tr("De siempre")}</h3>
@@ -239,7 +252,7 @@ export function AddExpenseSheet({ groupId, friendId, edit, preset, clearItems }:
       </div>
       <div className="keypad" role="group" aria-label={tr("Teclado del monto")}>
         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map(k => (
-          <button key={k} className="key tap" onClick={() => key(k)} aria-label={k === 'del' ? tr("Borrar") : k === '.' ? tr("Punto") : k}>{k === 'del' ? <Icon n="del" /> : k}</button>
+          <button key={k} className="key tap" onClick={() => key(k)} aria-label={k === 'del' ? tr("Borrar") : k === '.' ? tr("Punto") : k} disabled={k === '.' && !curDecimals(cur)}>{k === 'del' ? <Icon n="del" /> : k}</button>
         ))}
       </div>
     </>

@@ -18,7 +18,7 @@ import { AnimMoney, Av, Avs, ExpRow, ItemStatus, Money, PayText, RowIc, useAct, 
 import { H1, H2, Txt } from '../ui/text';
 import { useToast } from '../ui/toast';
 import { remind, XferRow } from './settle';
-import { tr } from '@saldao/core';
+import { curSym, tr } from '@saldao/core';
 
 const Gone = ({ text }: { text: string }) => <StackScreen><Empty icon="receipt" title={text} /></StackScreen>;
 const Day = ({ title, right }: { title: string; right?: React.ReactNode }) => (
@@ -165,7 +165,7 @@ export function ExpenseScreen() {
         </View>
         <H1>{e.isPayment ? <PayText s={s} e={e} /> : e.description}</H1>
         <Money c={e.amount} cur={e.currency} s={40} f="display" />
-        {e.currency !== 'DOP' && <Note>{tr("Equivale a {0} · US$ 1 = RD$ {1} ese día", moneyT(toBase(e).total), e.fxRate.toFixed(2))}</Note>}
+        {e.currency !== 'DOP' && <Note>{tr("Equivale a {0} · {1} 1 = RD$ {2} ese día", moneyT(toBase(e).total), curSym(e.currency), e.fxRate < 10 ? String(e.fxRate) : e.fxRate.toFixed(2))}</Note>}
         {e.pending && <Status pill={<Pill>{tr("sin enviar")}</Pill>} text={tr("Guardado en este teléfono: se envía solo cuando haya conexión.")} />}
         {e.repeat && !e.deletedAt && <View style={{ gap: 4 }}><Status pill={<Pill tone="ok">{repeatText(e.repeat).toLowerCase()}</Pill>} text={tr("Se anota solo cuando toca.")} />
           {editable && <LinkBtn title={tr("Dejar de repetir")} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} onPress={() => act(b => b.saveExpense({ ...e, repeat: null }), tr("Ya no se repite"))} />}</View>}

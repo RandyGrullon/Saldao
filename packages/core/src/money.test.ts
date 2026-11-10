@@ -2,7 +2,9 @@
 // y las esquinas (centavos sueltos, tasas chiquitas, comas, negativos). Las tasas son pesos por 1 de cada moneda.
 import { describe, expect, it } from 'vitest';
 import { apportion, itemSplit, nets, pairTransfers, pairVal, simplify, split, sum, toBase, type Expense } from './domain';
-import { moneyT, parseMoney } from './format';
+import { fetchRate } from './features';
+import { centsText, curName, CURRENCIES, curStep, moneyT, parseMoney, parseNum } from './format';
+import { setLang } from './i18n';
 
 const RATE = { DOP: 1, USD: 63.1, EUR: 68.45, CNY: 8.7631, JPY: 0.4123 } as const;
 type Cur = keyof typeof RATE;
@@ -75,9 +77,9 @@ describe('en las cinco monedas, lo que debe salir bien', () => {
       });
 
       it('formato del monto', () => {
-        expect(moneyT(123456, cur)).toMatch(/1,234\.56$/);
-        expect(moneyT(-5, cur)).toMatch(/^−.*0\.05$/);
-        expect(moneyT(0, cur)).toMatch(/0\.00$/);
+        expect(moneyT(123456, cur)).toMatch(cur === 'JPY' ? /1,235$/ : /1,234\.56$/);
+        expect(moneyT(-500, cur)).toMatch(cur === 'JPY' ? /^−.* 5$/ : /^−.*5\.00$/);
+        expect(moneyT(0, cur)).toMatch(cur === 'JPY' ? / 0$/ : /0\.00$/);
       });
     });
   }
@@ -131,36 +133,103 @@ describe('lo que debe fallar o quedarse quieto', () => {
   });
 });
 
-// Lo que encontramos al probar. Cada una pasa mientras el error siga ahí (it.fails); al arreglarlo se cambia a it.
-describe('errores encontrados', () => {
-  it.fails('una coma decimal («12,50», como escriben en euros) se lee como 12.50 y no como 1,250', () => {
+// Lo que encontramos al probar y quedó arreglado.
+describe('errores arreglados', () => {
+  it('la coma decimal («12,50», como escriben en euros) y los miles con punto («1.234,56»)', () => {
     expect(parseMoney('12,50')).toBe(1250);
-  });
-
-  it.fails('«1.234,56» (miles con punto, decimales con coma) se lee como 1,234.56', () => {
+    expect(parseMoney('12,5')).toBe(1250);
     expect(parseMoney('1.234,56')).toBe(123456);
+    expect(parseMoney('1,234.56')).toBe(123456);
+    expect(parseMoney('1,234')).toBe(123400);       // aquí la coma de miles
+    expect(parseMoney('0,125')).toBe(13);           // detrás de un 0 es decimal
+    expect(parseMoney('1.234.567')).toBe(123456700);
+    expect(parseMoney('1.005')).toBe(101);           // sin el error de coma flotante
+    expect(parseMoney(' 2 500,75 ')).toBe(250075);
+    expect(parseMoney('-12,50')).toBe(-1250);
+    expect(parseNum('63,10')).toBe(63.1);
+    expect(parseNum('1,5')).toBe(1.5);
   });
 
-  it.fails('«Infinity» no es un monto', () => {
-    expect(parseMoney('Infinity')).toBe(0);
+  it('lo que no es un número es cero: «Infinity», «1e3», «12,50,3», «1.2.3,4,5»', () => {
+    for (const s of ['Infinity', '-Infinity', '1e3', '12,50,3', '1.2.3,4,5', 'RD$ 12', '12abc']) expect(parseMoney(s), s).toBe(0);
   });
 
-  it.fails('un gasto que en pesos redondea a cero (¥0.01) no rompe los saldos', () => {
+  it('un gasto que en pesos redondea a cero (¥0.01 o tasa cero) no rompe los saldos', () => {
     const e = ex({ currency: 'JPY', fxRate: RATE.JPY, amount: 1, payers: { a: 1 }, shares: { b: 1 } });
-    expect(Number.isFinite(pairVal(e, 'a', 'b'))).toBe(true);
+    expect(pairVal(e, 'a', 'b')).toBe(0);
+    expect(nets([e])).toEqual({});
+    const sinTasa = ex({ currency: 'EUR', fxRate: 0, amount: 1000, payers: { a: 1000 }, shares: { b: 1000 } });
+    expect(pairVal(sinTasa, 'a', 'b')).toBe(0);
   });
 
-  it.fails('montos exactos con un negativo no cuadran aunque la suma dé el total', () => {
-    expect(split('exact', 10000, ['a', 'b'], { vals: { a: '150', b: '-50' } }).ok).toBe(false);
+  it('montos exactos o porcentajes con un negativo no cuadran aunque la suma dé el total', () => {
+    expect(split('exact', 10000, ['a', 'b'], { vals: { a: '150', b: '-50' } })).toMatchObject({ ok: false, status: 'No puede haber montos negativos' });
+    expect(split('percent', 10000, ['a', 'b'], { vals: { a: '150', b: '-50' } })).toMatchObject({ ok: false, status: 'No puede haber porcentajes negativos' });
   });
 
-  it.fails('lo que a le debe a b es lo mismo visto desde los dos lados (sin un centavo de diferencia)', () => {
-    // 3 pagadores y 3 partes con un reparto que deja medio centavo
-    let bad = 0;
+  it('lo que a le debe a b es lo mismo visto desde los dos lados', () => {
     for (let i = 1; i <= 300; i++) {
       const e = ex({ currency: 'USD', fxRate: RATE.USD, amount: 3 * i + 1, payers: { a: 2 * i + 1, b: i }, shares: { a: i, b: i, c: i + 1 } });
-      if (pairVal(e, 'a', 'b') !== -pairVal(e, 'b', 'a')) bad++;
+      for (const [x, y] of [['a', 'b'], ['a', 'c'], ['b', 'c']]) expect(pairVal(e, x, y)).toBe(-pairVal(e, y, x) || 0);
     }
-    expect(bad).toBe(0);
+  });
+});
+
+describe('yenes, yuanes y euros', () => {
+  it('símbolos, nombres y decimales', () => {
+    expect(moneyT(150000, 'JPY')).toBe('¥ 1,500');
+    expect(moneyT(150050, 'JPY')).toBe('¥ 1,501');
+    expect(moneyT(123456, 'CNY')).toBe('CN¥ 1,234.56');
+    expect(moneyT(123456, 'EUR')).toBe('€ 1,234.56');
+    expect(moneyT(123456, 'USD')).toBe('US$ 1,234.56');
+    expect(moneyT(123456)).toBe('RD$ 1,234.56');
+    expect(CURRENCIES).toEqual(['DOP', 'USD', 'EUR', 'CNY', 'JPY']);
+    expect(curName('JPY')).toBe('Yen');
+    expect([curStep('JPY'), curStep('EUR'), curStep('DOP')]).toEqual([100, 1, 1]);
+    expect(parseMoney('1500.4', 'JPY')).toBe(150000);   // el yen no tiene centavos
+    expect(parseMoney('1500.5', 'JPY')).toBe(150100);
+    expect(centsText(150000, 'JPY')).toBe('1500');
+    expect(centsText(1250, 'EUR')).toBe('12.50');
+  });
+
+  it('en yenes nadie queda con fracciones de yen, y todo suma el total', () => {
+    for (const mode of ['equal', 'shares', 'percent', 'adjust'] as const) {
+      const vals: Record<string, string> = mode === 'percent' ? { a: '33.33', b: '33.33', c: '33.34' } : mode === 'adjust' ? { a: '7' } : { a: '1', b: '2', c: '1' };
+      const r = split(mode, 100000, ['a', 'b', 'c'], { on: { a: true, b: true, c: true }, vals }, c => moneyT(c, 'JPY'), 100);
+      expect(r.ok, mode).toBe(true);
+      expect(sum(r.shares), mode).toBe(100000);
+      for (const v of Object.values(r.shares)) expect(v % 100, mode).toBe(0);
+    }
+    const r = itemSplit([{ name: 'Ramen', price: 120000, to: ['a', 'b', 'c'] }, { name: 'Gyoza', price: 50000, to: ['b'] }], 10, 0, 100);
+    expect(r.taxC % 100).toBe(0);
+    expect(sum(r.shares)).toBe(r.total);
+    for (const v of Object.values(r.shares)) expect(v % 100).toBe(0);
+    expect(split('exact', 100000, ['a', 'b'], { vals: { a: '600', b: '400' } }, undefined, 100)).toMatchObject({ ok: true, shares: { a: 60000, b: 40000 } });
+  });
+
+  it('la tasa de hoy de cualquier moneda, en pesos', async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => ({ json: async () => ({ result: 'success', rates: { USD: 1, DOP: 63.1, EUR: 0.92, CNY: 7.2, JPY: 152.5 } }) })) as unknown as typeof fetch;
+    try {
+      expect(await fetchRate('USD')).toBe(63.1);
+      expect(await fetchRate('EUR')).toBe(68.587);
+      expect(await fetchRate('CNY')).toBe(8.7639);
+      expect(await fetchRate('JPY')).toBe(0.4138);
+      expect(await fetchRate('DOP')).toBe(1);
+      expect(await fetchRate('XYZ')).toBeNull();
+    } finally { globalThis.fetch = real; }
+    globalThis.fetch = (async () => { throw new Error('sin señal'); }) as unknown as typeof fetch;
+    try { expect(await fetchRate('EUR')).toBeNull(); } finally { globalThis.fetch = real; }
+  });
+
+  it('en noches, el texto habla de noches (también en inglés)', () => {
+    expect(split('shares', 10000, ['a', 'b'], { vals: { a: '2', b: '1' }, nights: true }).status).toBe('3 noches en total');
+    expect(split('shares', 10000, ['a', 'b'], { vals: {}, nights: true }).status).toBe('Pon cuántas noches estuvo cada quien');
+    setLang('en');
+    try {
+      expect(split('shares', 10000, ['a', 'b'], { vals: { a: '2', b: '1' }, nights: true }).status).toBe('3 nights in total');
+      expect(split('equal', 10000, ['a', 'b'], { on: { a: true, b: true } }).status).toBe('Split equally among 2');
+      expect(split('exact', 10000, ['a', 'b'], { vals: { a: '50' } }, c => moneyT(c)).status).toBe('RD$ 50.00 short');
+    } finally { setLang('es'); }
   });
 });

@@ -1,14 +1,15 @@
 // Las piezas de siempre con las medidas de la web: tarjetas de 22, filas de 64 con la línea a 20 px del borde, botones
 // de 44 (56 los grandes), pastillas, segmentados, chips, campos y las entradas que suben un poco al aparecer.
-import { Children, isValidElement, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { Children, isValidElement, useCallback, useState, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, type RefreshControlProps, ScrollView, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { go } from '../lib/nav';
 import { ANIM, F, R, SIZE, useC } from '../lib/theme';
 import { Icon, type IconName } from './icons';
 import { H1, Txt } from './text';
-import { tr } from '@saldao/core';
+import { sync, tr } from '@saldao/core';
+import { useToast } from './toast';
 
 // ── movimiento: cada bloque sube 8 px y aparece, uno tras otro (28 ms) ──
 const rise = (i: number) => new Keyframe({ 0: { opacity: 0, transform: [{ translateY: 8 }] }, 100: { opacity: 1, transform: [{ translateY: 0 }] } })
@@ -25,11 +26,28 @@ function Stagger({ children }: { children: ReactNode }) {
   return <>{Children.toArray(children).filter(Boolean).map((ch, i) => <Rise key={keyOf(ch, i)} i={i}>{ch}</Rise>)}</>;
 }
 
+/**
+ * Deslizar hacia abajo estando arriba del todo: manda lo pendiente y trae los datos de nuevo. En Android y en la web,
+ * ScrollView mete la lista dentro de este control (le pasa children y style): hay que pasarle todo lo que recibe.
+ */
+function Refresh(props: Partial<RefreshControlProps>) {
+  const c = useC(), toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setBusy(true);
+    try { await sync(); toast(tr('Datos al día')); }
+    catch { toast(tr('No se pudo completar. Revisa tu conexión e intenta de nuevo.')); }
+    finally { setBusy(false); }
+  }, [toast]);
+  return <RefreshControl {...props} refreshing={busy} onRefresh={onRefresh} tintColor={c.accentInk} colors={[c.accentInk]} progressBackgroundColor={c.surface}
+    title={busy ? tr('Actualizando…') : undefined} titleColor={c.muted} />;
+}
+
 /** Pestañas: arriba la zona segura, abajo libre de la barra de pestañas (que flota encima). */
 export function TabScreen({ children }: { children: ReactNode }) {
   const c = useC(), insets = useSafeAreaInsets();
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} keyboardShouldPersistTaps="handled"
+    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} keyboardShouldPersistTaps="handled" refreshControl={<Refresh />}
       contentContainerStyle={[st.pad, { paddingTop: insets.top + 20, paddingBottom: SIZE.tabbar + insets.bottom + 96 }]}>
       <Stagger>{children}</Stagger>
     </ScrollView>
@@ -54,7 +72,7 @@ export function StackScreen({ right, children, footer }: { right?: ReactNode; ch
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Bar right={right} />
-      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled"
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" refreshControl={<Refresh />}
         contentContainerStyle={[st.pad, { paddingTop: 4, paddingBottom: insets.bottom + 48 }]}>
         <Stagger>{children}</Stagger>
       </ScrollView>

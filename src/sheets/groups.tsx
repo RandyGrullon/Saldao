@@ -96,14 +96,14 @@ export function InviteSheet({ groupId }: { groupId: Id }) {
         {others.length > 0 && <>
           <h3>{tr("Agregar de tus otros grupos")}</h3>
           <div className="chips">{others.map(p => (
-            <button key={p} className="chip person tap" onClick={() => add(() => getBackend()!.addMember(g.id, p), `${short(s, p)} ya está en ${g.name}`)}>
+            <button key={p} className="chip person tap" onClick={() => add(() => getBackend()!.addMember(g.id, p), tr('{0} ya está en {1}', short(s, p), g.name))}>
               <Av id={p} size="xs" />{short(s, p)} <Icon n="plus" sm /></button>))}</div>
         </>}
         <h3>{tr("Alguien que todavía no usa Saldao")}</h3>
         <div className="composer">
           <input placeholder={tr("Nombre")} value={draft} onChange={e => setDraft(e.target.value)} enterKeyHint="done" autoComplete="off" aria-label={tr("Nombre de la persona")} />
           <button className="icon-btn tap" aria-label={tr("Agregar persona")} disabled={!draft.trim()}
-            onClick={() => { const n = draft.trim(); setDraft(''); add(() => getBackend()!.addPlaceholder(g.id, n), `${n} agregado. Mándale el enlace para que reclame su lugar.`); }}><Icon n="plus" /></button>
+            onClick={() => { const n = draft.trim(); setDraft(''); add(() => getBackend()!.addPlaceholder(g.id, n), tr('{0} agregado. Mándale el enlace para que reclame su lugar.', n)); }}><Icon n="plus" /></button>
         </div>
       </div>
     </>

@@ -10,7 +10,7 @@ import { GroupSettingsSheet } from '../sheets/group-settings';
 import { QrSheet } from '../sheets/qr';
 import { pickPhoto, readPhoto } from '../lib/photo';
 import { GroupPhoto, usePhotoUrl } from '../ui/photo';
-import { tr } from '@saldao/core';
+import { curSym, tr } from '@saldao/core';
 
 export const Bar = ({ right }: { right?: React.ReactNode }) => {
   const nav = useNav();
@@ -160,7 +160,7 @@ export function ExpenseScreen({ id }: { id: Id }) {
           <p className="meta"><Icon n={c.icon} sm />{c.name} · {fday(e.date)}{g && g.kind !== 'directo' ? ` · ${g.name}` : ''}</p>
           <h1>{e.isPayment ? payText(s, e) : e.description}</h1>
           <p className="big"><Money c={e.amount} cur={e.currency} /></p>
-          {e.currency !== 'DOP' && <p className="note">{tr("Equivale a {0} · US$ 1 = RD$ {1} ese día", moneyT(toBase(e).total), e.fxRate.toFixed(2))}</p>}
+          {e.currency !== 'DOP' && <p className="note">{tr("Equivale a {0} · {1} 1 = RD$ {2} ese día", moneyT(toBase(e).total), curSym(e.currency), e.fxRate < 10 ? String(e.fxRate) : e.fxRate.toFixed(2))}</p>}
           {e.pending && <p className="note"><Pill>{tr("sin enviar")}</Pill>{" "}{tr("Guardado en este teléfono: se envía solo cuando haya conexión.")}</p>}
           {e.repeat && !e.deletedAt && <p className="note"><Pill tone="ok"><Icon n="repeat" sm /> {repeatText(e.repeat).toLowerCase()}</Pill>{" "}{tr("Se anota solo cuando toca.")}{editable && <button className="link tap" onClick={() => act(b => b.saveExpense({ ...e, repeat: null }), tr("Ya no se repite"))}>{tr("Dejar de repetir")}</button>}</p>}
           {e.repeatFrom && <p className="note"><Pill><Icon n="repeat" sm />{" "}{tr("repetido")}</Pill>{" "}{tr("Se anotó solo, como {0}.", s.expenses.find(x => x.id === e.repeatFrom)?.description ? `«${s.expenses.find(x => x.id === e.repeatFrom)!.description}»` : tr("el original"))}</p>}

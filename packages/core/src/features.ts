@@ -166,13 +166,13 @@ export function exportHtml(s: Snapshot, groupId?: Id, debtsLines: string[] = [])
   const title = groupId ? groupLabel(s, groupId) : tr("Todas mis cuentas");
   const rows = list.map(e => `<tr><td>${fdate(e.date)}</td><td>${esc(e.isPayment ? tr("Pago") : e.description)}${groupId ? '' : `<br><small>${esc(groupLabel(s, e.groupId))}</small>`}</td>`
     + `<td>${esc(Object.keys(e.payers).map(k => short(s, k)).join(', '))}</td><td class="n">${esc(moneyT(toBase(e).total))}</td></tr>`).join('');
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)} · Saldao</title><style>
+  return `<!doctype html><html lang="${getLang()}"><head><meta charset="utf-8"><title>${esc(title)} · Saldao</title><style>
 body{font:14px/1.4 -apple-system,system-ui,sans-serif;color:#121318;margin:32px}h1{font-size:22px;margin:0 0 4px}p{color:#6c6e78;margin:0 0 20px}
 table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1px solid #e5e3db;text-align:left;vertical-align:top}th{font-size:12px;color:#6c6e78}
 .n{text-align:right;white-space:nowrap}small{color:#6c6e78}ul{padding-left:18px}</style></head><body>
-<h1>${esc(title)}</h1><p>Saldao · ${esc(fdate(today()))} · ${list.length} movimientos · total ${esc(moneyT(sum(list.filter(e => !e.isPayment).map(e => toBase(e).total))))}</p>
-${debtsLines.length ? `<h2>Quién le debe a quién</h2><ul>${debtsLines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
-<table><thead><tr><th>Fecha</th><th>Qué</th><th>Pagó</th><th class="n">Monto</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+<h1>${esc(title)}</h1><p>Saldao · ${esc(fdate(today()))} · ${esc(tr('{0} movimientos · total {1}', list.length, moneyT(sum(list.filter(e => !e.isPayment).map(e => toBase(e).total)))))}</p>
+${debtsLines.length ? `<h2>${esc(tr('Quién le debe a quién'))}</h2><ul>${debtsLines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+<table><thead><tr><th>${esc(tr('Fecha'))}</th><th>${esc(tr('Qué'))}</th><th>${esc(tr('Pagó'))}</th><th class="n">${esc(tr('Monto'))}</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
 export const exportName = (s: Snapshot, groupId?: Id) => `saldao-${fold(groupId ? groupLabel(s, groupId) : 'mis-cuentas').replace(/[^a-z0-9]+/g, '-')}-${today()}`;
 
@@ -192,14 +192,19 @@ export function qrPath(text: string): { size: number; d: string } {
 
 // ── tasa del dólar ───────────────────────────────────────────
 /** La tasa de hoy (RD$ por US$ 1), de ExchangeRate-API. Sin conexión o si falla: null. */
-export async function fetchUsdRate(): Promise<number | null> {
+/** Pesos por 1 de esa moneda, de hoy (ExchangeRate-API, sin clave). Con 4 decimales: el yen vale menos de un peso. */
+export async function fetchRate(cur: string): Promise<number | null> {
+  if (cur === 'DOP') return 1;
   try {
     const r = await fetch('https://open.er-api.com/v6/latest/USD');
     const j = await r.json() as { result?: string; rates?: Record<string, number> };
-    const v = j.result === 'success' ? j.rates?.DOP : undefined;
-    return v && v > 0 ? Math.round(v * 100) / 100 : null;
+    const dop = j.rates?.DOP, x = j.rates?.[cur];
+    if (j.result !== 'success' || !dop || !x || dop <= 0 || x <= 0) return null;
+    return Math.round((dop / x) * 10000) / 10000;
   } catch { return null; }
 }
+/** @deprecated usar fetchRate('USD') */
+export const fetchUsdRate = () => fetchRate('USD');
 
 // ── fotos ────────────────────────────────────────────────────
 const tag = () => newId().replace(/-/g, '').slice(0, 8);

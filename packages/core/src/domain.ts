@@ -1,4 +1,7 @@
 // Reglas de dinero de la app. Todo en centavos enteros: nunca se suma con decimales.
+import { parseNum } from './format';
+import { tr } from './i18n';
+
 export type Id = string;
 export type Cents = number;
 export type SplitMode = 'equal' | 'exact' | 'percent' | 'shares' | 'adjust' | 'items' | 'payment';
@@ -54,54 +57,75 @@ export function apportion(total: Cents, w: Record<Id, number>): Record<Id, Cents
   return out;
 }
 
+/**
+ * Como apportion, pero en pasos de `step` centésimas: en yenes (step 100) nadie queda con fracciones de yen. Si el total
+ * no es múltiplo del paso, lo que sobra va a quien más le toca.
+ */
+export function apportionStep(total: Cents, w: Record<Id, number>, step = 1): Record<Id, Cents> {
+  if (step <= 1) return apportion(total, w);
+  const q = Math.floor(Math.max(total, 0) / step), out = apportion(q, w);
+  for (const k in out) out[k] *= step;
+  const extra = Math.max(total, 0) - q * step;
+  if (extra) { const k = Object.keys(out).filter(x => w[x] > 0).sort((a, b) => out[b] - out[a])[0]; if (k) out[k] += extra; }
+  return out;
+}
+
 /** Ítems de una factura: cada ítem se reparte entre quienes lo consumieron; ITBIS y ley, en proporción a lo consumido. */
-export function itemSplit(items: Item[], tax: number, tip: number) {
+export function itemSplit(items: Item[], tax: number, tip: number, step = 1) {
   const subs: Record<Id, Cents> = {};
   for (const it of items) if (it.to.length) {
-    const a = apportion(it.price, Object.fromEntries(it.to.map(k => [k, 1])));
+    const a = apportionStep(it.price, Object.fromEntries(it.to.map(k => [k, 1])), step);
     for (const k in a) subs[k] = (subs[k] || 0) + a[k];
   }
   const subtotal = items.reduce((a, it) => a + it.price, 0);
-  const taxC = Math.round((subtotal * tax) / 100), tipC = Math.round((subtotal * tip) / 100);
+  const pct = (p: number) => Math.round((subtotal * p) / 100 / step) * step;
+  const taxC = pct(tax), tipC = pct(tip);
   const total = subtotal + taxC + tipC;
   const unassigned = items.filter(i => !i.to.length).length;
-  return { subtotal, taxC, tipC, total, unassigned, shares: apportion(total, subs) };
+  return { subtotal, taxC, tipC, total, unassigned, shares: apportionStep(total, subs, step) };
 }
 
 export interface SplitResult { shares: Record<Id, Cents>; ok: boolean; status: string; diff: Cents }
 
-/** Calcula las partes de cada quien. `status` es el texto que ve la persona mientras divide. */
-export function split(mode: SplitMode, total: Cents, members: Id[], p: { on?: Record<Id, boolean>; vals?: Record<Id, string | number> } = {},
-  fmt: (c: Cents) => string = c => (c / 100).toFixed(2)): SplitResult {
+/**
+ * Calcula las partes de cada quien. `status` es el texto que ve la persona mientras divide. `step` es lo mínimo de la
+ * moneda en centésimas (100 en yenes) y `nights` cuenta las partes en noches.
+ */
+export function split(mode: SplitMode, total: Cents, members: Id[], p: { on?: Record<Id, boolean>; vals?: Record<Id, string | number>; nights?: boolean } = {},
+  fmt: (c: Cents) => string = c => (c / 100).toFixed(2), step = 1): SplitResult {
   const on = p.on || {}, vals = p.vals || {};
-  const v = (k: Id) => Number(String(vals[k] ?? '').replace(',', '.')) || 0;
+  const v = (k: Id) => parseNum(vals[k]);
+  const cents = (k: Id) => Math.round((v(k) * 100) / step) * step;
   let shares: Record<Id, Cents> = {}, ok = true, status = '', diff = 0;
   if (mode === 'equal') {
-    shares = apportion(total, Object.fromEntries(members.map(k => [k, on[k] ? 1 : 0])));
+    shares = apportionStep(total, Object.fromEntries(members.map(k => [k, on[k] ? 1 : 0])), step);
     const n = members.filter(k => on[k]).length;
-    ok = n > 0; status = ok ? `Partes iguales entre ${n}` : 'Elige al menos una persona';
+    ok = n > 0; status = ok ? tr('Partes iguales entre {0}', n) : tr('Elige al menos una persona');
   } else if (mode === 'exact') {
-    members.forEach(k => (shares[k] = Math.round(v(k) * 100)));
+    members.forEach(k => (shares[k] = cents(k)));
     diff = total - sum(shares);
-    ok = diff === 0; status = ok ? 'Cuadra con el total' : diff > 0 ? `Faltan ${fmt(diff)}` : `Sobran ${fmt(-diff)}`;
+    if (members.some(k => shares[k] < 0)) { ok = false; status = tr('No puede haber montos negativos'); }
+    else { ok = diff === 0; status = ok ? tr('Cuadra con el total') : diff > 0 ? tr('Faltan {0}', fmt(diff)) : tr('Sobran {0}', fmt(-diff)); }
   } else if (mode === 'percent') {
     const pct = Math.round(members.reduce((a, k) => a + v(k), 0) * 100) / 100;
-    ok = pct === 100;
-    if (ok) shares = apportion(total, Object.fromEntries(members.map(k => [k, v(k)])));
-    else members.forEach(k => (shares[k] = Math.round((total * v(k)) / 100)));
+    const negative = members.some(k => v(k) < 0);
+    ok = pct === 100 && !negative;
+    if (ok) shares = apportionStep(total, Object.fromEntries(members.map(k => [k, v(k)])), step);
+    else members.forEach(k => (shares[k] = Math.max(0, Math.round((total * v(k)) / 100))));
     const d = Math.round(Math.abs(100 - pct) * 100) / 100;
-    status = ok ? 'Los porcentajes suman 100 %' : pct < 100 ? `Falta ${d} % por asignar` : `Sobra ${d} %`;
+    status = negative ? tr('No puede haber porcentajes negativos') : ok ? tr('Los porcentajes suman 100 %') : pct < 100 ? tr('Falta {0} % por asignar', d) : tr('Sobra {0} %', d);
   } else if (mode === 'shares') {
     const w = Object.fromEntries(members.map(k => [k, Math.max(0, Math.round(v(k)))]));
-    shares = apportion(total, w);
+    shares = apportionStep(total, w, step);
     const n = sum(w);
-    ok = n > 0; status = ok ? `${n} partes en total` : 'Asigna al menos una parte';
+    ok = n > 0;
+    status = p.nights ? (ok ? tr('{0} noches en total', n) : tr('Pon cuántas noches estuvo cada quien')) : ok ? tr('{0} partes en total', n) : tr('Asigna al menos una parte');
   } else if (mode === 'adjust') {
-    const adj = Object.fromEntries(members.map(k => [k, Math.round(Math.max(0, v(k)) * 100)]));
+    const adj = Object.fromEntries(members.map(k => [k, Math.max(0, cents(k))]));
     const rest = total - sum(adj);
-    const base = apportion(Math.max(rest, 0), Object.fromEntries(members.map(k => [k, 1])));
+    const base = apportionStep(Math.max(rest, 0), Object.fromEntries(members.map(k => [k, 1])), step);
     members.forEach(k => (shares[k] = base[k] + adj[k]));
-    ok = rest >= 0; status = ok ? 'El extra se suma; el resto va en partes iguales' : 'Los extras pasan del total';
+    ok = rest >= 0; status = ok ? tr('El extra se suma; el resto va en partes iguales') : tr('Los extras pasan del total');
   }
   return { shares, ok: ok && total > 0, status, diff };
 }
@@ -124,7 +148,10 @@ export const involves = (e: Expense, k: Id) => e.payers[k] != null || e.shares[k
 /** Lo que b le debe a a por un gasto (negativo si a le debe a b). Cada saldo es la suma de estos valores. */
 export function pairVal(e: Expense, a: Id, b: Id): Cents {
   const { payers, shares, total } = toBase(e);
-  return Math.round(((shares[b] || 0) * (payers[a] || 0) - (shares[a] || 0) * (payers[b] || 0)) / total);
+  if (!total) return 0; // un gasto que en pesos redondea a cero (¥0.01) no mueve nada
+  // se redondea lejos de cero, igual para los dos lados: lo que a ve de b es exactamente lo contrario de lo que b ve de a
+  const x = ((shares[b] || 0) * (payers[a] || 0) - (shares[a] || 0) * (payers[b] || 0)) / total;
+  return Math.sign(x) * Math.round(Math.abs(x)) || 0;
 }
 
 export interface Transfer { from: Id; to: Id; amount: Cents }

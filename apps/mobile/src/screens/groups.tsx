@@ -94,7 +94,7 @@ export function InviteSheet() {
   const add = async (fn: () => Promise<unknown>, text: string) => {
     try { await run(() => fn().then(() => undefined)); buzz(); toast(text); } catch (e) { toast(errMsg(e)); }
   };
-  const addNew = () => { const n = draft.trim(); if (!n) return; setDraft(''); add(() => getBackend()!.addPlaceholder(grp.id, n), `${n} agregado. Mándale el enlace para que reclame su lugar.`); };
+  const addNew = () => { const n = draft.trim(); if (!n) return; setDraft(''); add(() => getBackend()!.addPlaceholder(grp.id, n), tr('{0} agregado. Mándale el enlace para que reclame su lugar.', n)); };
   return (
     <Sheet head={<SheetHead title={tr("Invitar")} left={<LinkBtn title={tr("Listo")} onPress={go.back} />} />}>
       <Section>
@@ -108,7 +108,7 @@ export function InviteSheet() {
       {others.length > 0 && <SheetH3>{tr("Agregar de tus otros grupos")}</SheetH3>}
       {others.length > 0 && <Chips>{others.map(p => (
         <Chip key={p} title={short(s, p)} left={<Av id={p} size="xs" />} right={<Icon n="plus" sm />}
-          onPress={() => add(() => getBackend()!.addMember(grp.id, p), `${short(s, p)} ya está en ${grp.name}`)} />))}</Chips>}
+          onPress={() => add(() => getBackend()!.addMember(grp.id, p), tr('{0} ya está en {1}', short(s, p), grp.name))} />))}</Chips>}
       <SheetH3>{tr("Alguien que todavía no usa {0}", APP.name)}</SheetH3>
       <Composer value={draft} onChange={setDraft} onAdd={addNew} label={tr("Nombre de la persona")} />
     </Sheet>

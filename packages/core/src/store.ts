@@ -169,7 +169,7 @@ async function sendQueue() {
       } catch (e) {
         if (g !== gen) return;
         if (isRetry(e)) { offline = true; schedule(); break; }
-        op.error = e instanceof Error ? e.message : 'No se pudo guardar';
+        op.error = e instanceof Error ? e.message : tr('No se pudo guardar');
       }
       void saveQueue(); publish();
     }

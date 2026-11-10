@@ -34,13 +34,13 @@ export function Money({ c, cur = 'DOP', sign = false, s = 16, f = 'semi', color,
   c: number; cur?: string; sign?: boolean; s?: number; f?: keyof typeof F; color?: string; style?: StyleProp<TextStyle>; fit?: number;
 }) {
   const t = useC();
-  const [i, d] = parts(c), pre = c < 0 ? '−' : sign && c > 0 ? '+' : '';
-  const len = `${pre}${curSym(cur)} ${i}.${d}`.length;
+  const [i, d] = parts(c, cur), pre = c < 0 ? '−' : sign && c > 0 ? '+' : '';
+  const len = `${pre}${curSym(cur)} ${i}${d ? `.${d}` : ''}`.length;
   const size = fit && len > fit ? Math.max(Math.round(s * 0.6), Math.floor((s * fit) / len)) : s;
   return (
     <Text numberOfLines={1} style={[{ fontFamily: F[f], fontSize: size, color: color ?? t.fg, fontVariant: ['tabular-nums'], letterSpacing: -0.02 * size,
       lineHeight: Math.round(size * 1.25) }, style, fit ? { letterSpacing: -0.04 * size, lineHeight: Math.round(size * 1.15) } : null]}>
-      {pre}{curSym(cur)}{' '}{i}<Text style={{ fontSize: Math.round(size * 0.72), opacity: 0.6 }}>.{d}</Text>
+      {pre}{curSym(cur)}{' '}{i}{d ? <Text style={{ fontSize: Math.round(size * 0.72), opacity: 0.6 }}>.{d}</Text> : null}
     </Text>
   );
 }

@@ -36,7 +36,18 @@ export function ChoiceChip<T extends string>({ icon, value, groups, onChange, ti
     <>
       <Chip title={label} label={`${title}: ${label}`} onPress={disabled ? undefined : () => setOpen(true)}
         left={<View style={{ paddingLeft: 8 }}><Icon n={icon} sm color={c.fg2} /></View>} />
-      <Bottom open={open} onClose={() => setOpen(false)} title={title}>
+      <ChoiceSheet open={open} onClose={() => setOpen(false)} title={title} value={value} groups={groups} onChange={onChange} />
+    </>
+  );
+}
+
+/** La hoja con las opciones, para abrirla desde cualquier botón. */
+export function ChoiceSheet<T extends string>({ open, onClose, title, value, groups, onChange }: {
+  open: boolean; onClose: () => void; title: string; value: T; groups: ChoiceGroup<T>[]; onChange: (v: T) => void;
+}) {
+  const c = useC();
+  return (
+      <Bottom open={open} onClose={onClose} title={title}>
         <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}>
           {groups.map((g, gi) => (
             <View key={gi} style={{ gap: 2 }}>
@@ -44,7 +55,7 @@ export function ChoiceChip<T extends string>({ icon, value, groups, onChange, ti
               {g.options.map(([k, l]) => {
                 const on = k === value;
                 return (
-                  <Pressable key={k} onPress={() => { buzz(); onChange(k); setOpen(false); }} accessibilityRole="radio" accessibilityState={{ checked: on }}
+                  <Pressable key={k} onPress={() => { buzz(); onChange(k); onClose(); }} accessibilityRole="radio" accessibilityState={{ checked: on }}
                     style={({ pressed }) => [ch.opt, { backgroundColor: on ? c.accentSoft : pressed ? c.surface2 : 'transparent' }]}>
                     <Txt f={on ? 'semi' : 'regular'} color={on ? c.accentInk : c.fg} style={{ flex: 1 }}>{l}</Txt>
                     {on && <Icon n="check" sm color={c.accentInk} />}
@@ -55,7 +66,6 @@ export function ChoiceChip<T extends string>({ icon, value, groups, onChange, ti
           ))}
         </ScrollView>
       </Bottom>
-    </>
   );
 }
 

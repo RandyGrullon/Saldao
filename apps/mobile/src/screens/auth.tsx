@@ -118,7 +118,7 @@ export function AuthScreen() {
       <View>
         <Image source={require('../../assets/splash-icon.png')} style={a.brand} accessibilityIgnoresInvertColors />
         <H1 s={34}>{APP.name}</H1>
-        <Txt s={17} c="muted" style={{ marginTop: 8 }}>{APP.description}</Txt>
+        <Txt s={17} c="muted" style={{ marginTop: 8 }}>{tr(APP.description)}</Txt>
       </View>
       {mode === 'reset' ? <Note>{tr("Escribe tu correo y te mandamos un enlace para crear una contraseña nueva.")}</Note>
         : <Seg label={tr("Entrar o crear cuenta")} value={mode} onChange={m => go(m)} options={[['login', tr("Entrar")], ['register', tr("Crear cuenta")]]} />}

@@ -16,6 +16,7 @@ import { SyncPill } from './ui/sync';
 import { ListScreen, SearchScreen, SummaryScreen } from './screens/more';
 import { lockOn, unlock } from './lib/lock';
 import { tr } from '@saldao/core';
+import { PullToRefresh, UpdateBar } from './ui/update';
 
 /** La bienvenida de index.html se va cuando hay algo que mostrar (y a más tardar a los 4 s). */
 function hideSplash() {
@@ -99,6 +100,8 @@ function Ready() {
       tabbar={nav => <><SyncPill /><Tabbar nav={nav} unread={unread.n} /></>}>
       {token && <OpenOnce node={<JoinSheet token={token} />} label={tr("Invitación")} />}
       {busy && <div className="top-loader" role="progressbar" aria-label={tr("Guardando")} />}
+      <UpdateBar />
+      <PullToRefresh />
     </NavShell>
   );
 }

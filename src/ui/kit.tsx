@@ -24,8 +24,8 @@ export function useAct() {
 }
 
 export function Money({ c, cur = 'DOP', sign = false }: { c: number; cur?: string; sign?: boolean }) {
-  const [i, d] = parts(c), s = c < 0 ? '−' : sign && c > 0 ? '+' : '';
-  return <span className="money">{s}{curSym(cur)}&nbsp;{i}<small>.{d}</small></span>;
+  const [i, d] = parts(c, cur), s = c < 0 ? '−' : sign && c > 0 ? '+' : '';
+  return <span className="money">{s}{curSym(cur)}&nbsp;{i}{d && <small>.{d}</small>}</span>;
 }
 /** Un saldo que cuenta hasta su valor al aparecer o cambiar (como los números de MatchMate). Quieto con «menos movimiento». */
 export function AnimMoney({ c, cur, sign }: { c: number; cur?: string; sign?: boolean }) {
